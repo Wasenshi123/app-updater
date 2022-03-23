@@ -1,12 +1,36 @@
 using Avalonia.Controls;
+using Avalonia.ReactiveUI;
+using ReactiveUI;
+using System;
+using System.Reactive;
+using System.Threading.Tasks;
+using Updater.ViewModels;
 
 namespace Updater.Views
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : ReactiveWindow<MainWindowViewModel>
     {
         public MainWindow()
         {
             InitializeComponent();
+            this.WhenActivated(d => d(ViewModel!.FindFolder.RegisterHandler(DoShowFolderDialogAsync)));
+        }
+
+        public async Task<string?> GetPath()
+        {
+            OpenFolderDialog dialog = new OpenFolderDialog();
+            dialog.Title = "Client App Path";
+            dialog.Directory = AppDomain.CurrentDomain.BaseDirectory;
+
+            string? result = await dialog.ShowAsync(this);
+
+            return result;
+        }
+
+        public async Task DoShowFolderDialogAsync(InteractionContext<Unit, string?> interaction)
+        {
+            var result = await GetPath();
+            interaction.SetOutput(result);
         }
     }
 }

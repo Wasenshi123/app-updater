@@ -12,6 +12,37 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+	<Panel>
+		<Viewbox Margin="40">
+			<DockPanel Height="230">
+				<Button DockPanel.Dock="Bottom"
+						HorizontalContentAlignment="Center"
+						HorizontalAlignment="Center"
+						FontSize="20"
+						Command="{Binding SaveConfig}">
+					Save
+				</Button>
+				<StackPanel Spacing="20" Width="550">
+					<DockPanel>
+						<Label VerticalContentAlignment="Center">App Path:</Label>
+						<Button DockPanel.Dock="Right" Command="{Binding Find}">
+							<PathIcon Data="{StaticResource folder_open_regular}"></PathIcon>
+						</Button>
+						<TextBox Text="{Binding AppPath}" ></TextBox>
+						
+					</DockPanel>
+					<DockPanel>
+						<Label VerticalContentAlignment="Center">App Name:</Label>
+						<TextBox Text="{Binding AppName}"></TextBox>
+					</DockPanel>
+					<DockPanel>
+						<Label VerticalContentAlignment="Center">Update Server:</Label>
+						<TextBox Text="{Binding Server}"></TextBox>
+					</DockPanel>
+					
+				</StackPanel>
+			</DockPanel>
+		</Viewbox>
+	</Panel>
 
 </Window>
