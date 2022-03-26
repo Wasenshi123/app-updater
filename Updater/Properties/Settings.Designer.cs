@@ -58,5 +58,16 @@ namespace Updater.Properties {
                 this["AppName"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        public global::UpdaterLib.UpdateInfo LastVersion {
+            get {
+                return ((global::UpdaterLib.UpdateInfo)(this["LastVersion"]));
+            }
+            set {
+                this["LastVersion"] = value;
+            }
+        }
     }
 }

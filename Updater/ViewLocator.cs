@@ -9,12 +9,17 @@ namespace Updater
     {
         public IControl Build(object data)
         {
-            var name = data.GetType().FullName!.Replace("ViewModel", "View");
+            var name = data.GetType()?.FullName.Replace("ViewModel", "View");
             var type = Type.GetType(name);
+            if (type == null)
+            {
+                name = name.Substring(0, name.LastIndexOf("View"));
+                type = Type.GetType(name);
+            }
 
             if (type != null)
             {
-                return (Control)Activator.CreateInstance(type)!;
+                return (Control)Activator.CreateInstance(type);
             }
             else
             {

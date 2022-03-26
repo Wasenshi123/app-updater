@@ -6,7 +6,10 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Updater.Views.MainWindow"
         Icon="/Assets/avalonia-logo.ico"
-        Title="Updater">
+        Title="Updater"
+		
+		WindowStartupLocation="CenterScreen"
+		>
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -15,13 +18,28 @@
 	<Panel>
 		<Viewbox Margin="40">
 			<DockPanel Height="230">
-				<Button DockPanel.Dock="Bottom"
+				<StackPanel Orientation="Horizontal" 
+							Spacing="20" 
+							HorizontalAlignment="Center"
+							DockPanel.Dock="Bottom">
+					<Button
 						HorizontalContentAlignment="Center"
 						HorizontalAlignment="Center"
 						FontSize="20"
+						Width="100"
 						Command="{Binding SaveConfig}">
-					Save
-				</Button>
+						Save
+					</Button>
+					<Button
+						HorizontalContentAlignment="Center"
+						HorizontalAlignment="Center"
+						FontSize="20"
+						Width="80"
+						Command="{Binding Close}">
+						Close
+					</Button>
+				</StackPanel>
+				
 				<StackPanel Spacing="20" Width="550">
 					<DockPanel>
 						<Label VerticalContentAlignment="Center">App Path:</Label>

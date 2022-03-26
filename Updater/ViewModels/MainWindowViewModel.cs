@@ -19,6 +19,7 @@ namespace Updater.ViewModels
 
         public ICommand SaveConfig { get; }
         public ICommand Find { get; }
+        public ReactiveCommand<Unit, Unit> Close { get; }
 
         public MainWindowViewModel()
         {
@@ -37,6 +38,8 @@ namespace Updater.ViewModels
 
                 Settings.Default.Save();
                 Settings.Default.Reload();
+
+                Server = Settings.Default.UpdateServer;
             });
 
             Find = ReactiveCommand.CreateFromTask(async () =>
@@ -47,6 +50,8 @@ namespace Updater.ViewModels
                     AppPath = result;
                 }
             });
+
+            Close = ReactiveCommand.Create(() => { });
         }
 
         public string AppPath { get => appPath; set => this.RaiseAndSetIfChanged(ref appPath, value); }

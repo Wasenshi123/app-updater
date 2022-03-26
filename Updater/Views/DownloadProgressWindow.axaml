@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:converter="using:Updateer.Converters"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="Updater.Views.DownloadProgressWindow"
+        Title="Download"
+		WindowStartupLocation="CenterScreen">
+	<Window.Resources>
+		<converter:PercentConverter x:Key="percent" />
+	</Window.Resources>
+	<Panel>
+		<Viewbox IsVisible="{Binding !IsFailed}">
+			<Panel VerticalAlignment="Center">
+				<StackPanel Spacing="20"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center"
+							Margin="50">
+					<Label HorizontalAlignment="Center"
+						Content="{Binding LabelTxt}"></Label>
+					<ProgressBar
+						Height="15"
+						CornerRadius="10"
+						Foreground="#789395"
+						Value="{Binding Percent, FallbackValue=50}">
+					</ProgressBar>
+					<Label HorizontalContentAlignment="Center"
+						   Content="{Binding ProgressTxt, FallbackValue=0kB/100kB}"
+					   >
+
+					</Label>
+					<Label HorizontalContentAlignment="Center"
+						   HorizontalAlignment="Center"
+						   Margin="0,50,0,0"
+				   >
+						The system will automatically reboot after finish updating
+					</Label>
+				</StackPanel>
+			</Panel>
+		</Viewbox>
+		<Viewbox IsVisible="{Binding IsFailed}">
+			<Panel VerticalAlignment="Center">
+				<DockPanel Margin="20">
+					<Button 
+						DockPanel.Dock="Bottom"
+						FontSize="22"
+						Width="100"
+						Command="{Binding Download}">
+						Retry
+					</Button>
+					<Label FontSize="16" Classes="wrap">
+						Download failed. Please check the server and connection, or contact administrator.
+					</Label>
+				</DockPanel>
+			</Panel>
+		</Viewbox>
+	</Panel>
+</Window>

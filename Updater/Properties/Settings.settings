@@ -11,5 +11,8 @@
     <Setting Name="AppName" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
+    <Setting Name="LastVersion" Type="UpdaterLib.UpdateInfo" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
   </Settings>
 </SettingsFile>

@@ -9,5 +9,6 @@
     <Application.Styles>
         <FluentTheme Mode="Light"/>
 		<StyleInclude Source="avares://Updater/Icons.axaml" />
+		<StyleInclude Source="avares://Updater/GlobalStyle.axaml" />
     </Application.Styles>
 </Application>
