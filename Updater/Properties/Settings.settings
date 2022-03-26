@@ -14,5 +14,11 @@
     <Setting Name="LastVersion" Type="UpdaterLib.UpdateInfo" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
+    <Setting Name="AutoReboot" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="ProgressFullscreen" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">True</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

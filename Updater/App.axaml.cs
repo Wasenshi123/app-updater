@@ -50,6 +50,7 @@ namespace Updater
                             throw;
                         }
 
+                        // 1st output : Detect output as bool in target app (the calling app)
                         Console.Out.WriteLine(upToDate);
 
                         if (!upToDate)

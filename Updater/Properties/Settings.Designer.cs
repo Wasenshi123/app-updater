@@ -69,5 +69,29 @@ namespace Updater.Properties {
                 this["LastVersion"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoReboot {
+            get {
+                return ((bool)(this["AutoReboot"]));
+            }
+            set {
+                this["AutoReboot"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ProgressFullscreen {
+            get {
+                return ((bool)(this["ProgressFullscreen"]));
+            }
+            set {
+                this["ProgressFullscreen"] = value;
+            }
+        }
     }
 }

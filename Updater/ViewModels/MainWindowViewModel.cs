@@ -16,6 +16,8 @@ namespace Updater.ViewModels
         private string appPath;
         private string server;
         private string appName;
+        private bool isFullscreen;
+        private bool autoReboot;
 
         public ICommand SaveConfig { get; }
         public ICommand Find { get; }
@@ -28,6 +30,8 @@ namespace Updater.ViewModels
             AppPath = Settings.Default.ClientAppPath;
             Server = Settings.Default.UpdateServer;
             AppName = Settings.Default.AppName;
+            IsFullscreen = Settings.Default.ProgressFullscreen;
+            AutoReboot = Settings.Default.AutoReboot;
 
             SaveConfig = ReactiveCommand.Create(() =>
             {
@@ -35,6 +39,8 @@ namespace Updater.ViewModels
                 Settings.Default.ClientAppPath = AppPath;
                 Settings.Default.UpdateServer = string.IsNullOrWhiteSpace(Server) ? "" : ("http://" + Regex.Replace(Server, @"(https?://)", ""));
                 Settings.Default.AppName = AppName;
+                Settings.Default.ProgressFullscreen = IsFullscreen;
+                Settings.Default.AutoReboot = AutoReboot;
 
                 Settings.Default.Save();
                 Settings.Default.Reload();
@@ -57,7 +63,8 @@ namespace Updater.ViewModels
         public string AppPath { get => appPath; set => this.RaiseAndSetIfChanged(ref appPath, value); }
         public string AppName { get => appName; set => this.RaiseAndSetIfChanged(ref appName, value); }
         public string Server { get => server; set => this.RaiseAndSetIfChanged(ref server, value); }
-        
+        public bool IsFullscreen { get => isFullscreen; set => this.RaiseAndSetIfChanged(ref isFullscreen, value); }
+        public bool AutoReboot { get => autoReboot; set => this.RaiseAndSetIfChanged(ref autoReboot, value); }
 
         public Interaction<Unit, string?> FindFolder { get; }
     }

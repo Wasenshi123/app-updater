@@ -1,8 +1,7 @@
 {
   "profiles": {
     "Updater": {
-      "commandName": "Project",
-      "commandLineArgs": "check"
+      "commandName": "Project"
     }
   }
 }

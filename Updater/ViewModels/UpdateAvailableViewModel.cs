@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using ReactiveUI;
 using System;
 using System.Reactive;
+using Updater.Properties;
 using Updater.Views;
 
 namespace Updater.ViewModels
@@ -16,6 +17,7 @@ namespace Updater.ViewModels
         {
             Confirm = ReactiveCommand.Create(() =>
             {
+                // 2nd output : Use this output code to detect it in the target app, eg. to automatically close the running instance
                 Console.Out.WriteLine("!!Update!!");
 
                 var desktop = (Application.Current!.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)!;
@@ -26,7 +28,10 @@ namespace Updater.ViewModels
                 desktop.MainWindow.Topmost = true;
                 desktop.MainWindow.Show();
 
-                desktop.MainWindow.WindowState = Avalonia.Controls.WindowState.FullScreen;
+                if (Settings.Default.ProgressFullscreen)
+                {
+                    desktop.MainWindow.WindowState = Avalonia.Controls.WindowState.FullScreen;
+                }
 
                 current.Close();
             });

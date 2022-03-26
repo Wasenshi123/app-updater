@@ -5,9 +5,9 @@ using Avalonia.ReactiveUI;
 using ReactiveUI;
 using Updater.ViewModels;
 using System;
-using CheckIn.Utils;
 using Updater.Utils;
 using Avalonia.Threading;
+using Updater.Properties;
 
 namespace Updater.Views
 {
@@ -26,7 +26,24 @@ namespace Updater.Views
                     Dispatcher.UIThread.Post(() => ViewModel.StartExtract(filePath).Subscribe((extracted) =>
                         Dispatcher.UIThread.Post(() => ViewModel.CleanAndFinish(extracted, filePath).Subscribe((_) =>
                         {
-                            // "sudo reboot".Cmd();
+                            // 3rd output : Use this output code to detect in calling app thread, eg. to auto re-start/run the updated instance
+                            Console.Out.WriteLine("!!Finish!!");
+                            if (Settings.Default.AutoReboot)
+                            {
+                                if (OperatingSystem.IsLinux())
+                                {
+                                    // For embeded environment, rebooting may be the best choice
+                                    "sudo reboot".Cmd();
+                                }
+                                else if (OperatingSystem.IsMacOS())
+                                {
+                                    "sudo shutdown -r now".Cmd();
+                                }
+                                else
+                                {
+                                    "shutdown /r /t:0".Cmd();
+                                }
+                            }
                         }))
                     ));
                 }

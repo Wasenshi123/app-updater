@@ -17,7 +17,7 @@
 
 	<Panel>
 		<Viewbox Margin="40">
-			<DockPanel Height="230">
+			<DockPanel Height="350">
 				<StackPanel Orientation="Horizontal" 
 							Spacing="20" 
 							HorizontalAlignment="Center"
@@ -40,7 +40,7 @@
 					</Button>
 				</StackPanel>
 				
-				<StackPanel Spacing="20" Width="550">
+				<StackPanel Spacing="20" Width="600">
 					<DockPanel>
 						<Label VerticalContentAlignment="Center">App Path:</Label>
 						<Button DockPanel.Dock="Right" Command="{Binding Find}">
@@ -57,7 +57,8 @@
 						<Label VerticalContentAlignment="Center">Update Server:</Label>
 						<TextBox Text="{Binding Server}"></TextBox>
 					</DockPanel>
-					
+					<CheckBox IsChecked="{Binding IsFullscreen}">Show in Fullscreen</CheckBox>
+					<CheckBox IsChecked="{Binding AutoReboot}">Auto reboot after finish</CheckBox>
 				</StackPanel>
 			</DockPanel>
 		</Viewbox>
