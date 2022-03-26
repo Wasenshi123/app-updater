@@ -5,6 +5,9 @@ using Avalonia.Markup.Xaml;
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using Updater.Properties;
 using Updater.Services;
 using Updater.ViewModels;
 using Updater.Views;
@@ -55,75 +58,90 @@ namespace Updater
 
                         if (!upToDate)
                         {
-                            desktop.MainWindow = new UpdateAvailableWindow
+                            if (commanlineArgs.Any(x => x.Replace("-", "") == "force" || x.Replace("-", "") == "f"))
                             {
-                                DataContext = new UpdateAvailableViewModel()
-                            };
-                            desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                            desktop.MainWindow.Topmost = true;
-                            desktop.MainWindow.Show();
+                                desktop.MainWindow = new DownloadProgressWindow();
+                                desktop.MainWindow.DataContext = new DownloadProgressViewModel();
+                                desktop.MainWindow.Topmost = true;
+                                desktop.MainWindow.Show();
 
-                            if (OperatingSystem.IsLinux())
-                            {
-                                // Trying to handle always on top on linux here, but can't make it work
-                                // If you know how, then please contribute
-                                try
+                                if (Settings.Default.ProgressFullscreen)
                                 {
-                                    //var platformImpl = desktop.MainWindow.PlatformImpl;
-                                    //var handle = platformImpl.Handle.Handle;
-                                    //var display = Xlib.XOpenDisplay(null);
-                                    ////var root = Xlib.XDefaultRootWindow(display); 
-                                    //Xlib.XGetWindowAttributes(display, (X11.Window)handle, out var attr);
-                                    //var root = attr.root;
-                                    //if (root == X11.Window.None)
-                                    //{
-                                    //    root = Xlib.XDefaultRootWindow(display);
-                                    //}
-
-                                    //Atom stateAbove = Xmu.XmuInternAtom(display, Xmu.XmuMakeAtom("_NET_WM_STATE_ABOVE"));
-                                    //if (stateAbove == Atom.None)
-                                    //{
-                                    //    Console.Error.WriteLine("state above is null");
-                                    //    return;
-                                    //}
-                                    //Atom netState = Xmu.XmuInternAtom(display, Xmu.XmuMakeAtom("_NET_WM_STATE"));
-                                    //if (netState == Atom.None)
-                                    //{
-                                    //    Console.Error.WriteLine("net state is null");
-                                    //    return;
-                                    //}
-                                    //XClientMessageEvent evOnTop = new XClientMessageEvent
-                                    //{
-                                    //    type = (int)Event.ClientMessage,
-                                    //    message_type = netState,
-                                    //    format = 32,
-                                    //    window = (X11.Window)handle,
-                                    //    display = display,
-                                    //};
-
-                                    //var data = new ClientMessageData { l = new int[] { 1, (int)stateAbove, 0, 0, 1 } };
-                                    ////var data = new int[] { 1, (int)stateAbove, 0, 0, 1 };
-                                    ////var dataHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
-                                    //int size = Marshal.SizeOf(data.l[0] * data.l.Length);
-                                    //var dataP = Marshal.AllocHGlobal(size);
-                                    ////Marshal.Copy(data.l, 0, dataP, size);
-                                    //Marshal.StructureToPtr(data.l, dataP, false);
-                                    //evOnTop.data = dataP;
-
-                                    //var eventP = Marshal.AllocHGlobal(Marshal.SizeOf(evOnTop));
-                                    //Marshal.StructureToPtr(evOnTop, eventP, false);
-                                    //Xlib.XSendEvent(display, root, true, (long)(EventMask.SubstructureNotifyMask | EventMask.SubstructureRedirectMask), eventP);
-
-                                    //Xlib.XFlush(display);
-
-                                    //Marshal.FreeHGlobal(dataP);
-                                    //Marshal.FreeHGlobal(eventP);
-
+                                    desktop.MainWindow.WindowState = WindowState.FullScreen;
                                 }
-                                catch (Exception error)
+                            }
+                            else
+                            {
+                                desktop.MainWindow = new UpdateAvailableWindow
                                 {
-                                    Console.Error.WriteLine(error);
-                                    throw;
+                                    DataContext = new UpdateAvailableViewModel()
+                                };
+                                desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                                desktop.MainWindow.Topmost = true;
+                                desktop.MainWindow.Show();
+
+                                if (OperatingSystem.IsLinux())
+                                {
+                                    // Trying to handle always on top on linux here, but can't make it work
+                                    // If you know how, then please contribute
+                                    try
+                                    {
+                                        //var platformImpl = desktop.MainWindow.PlatformImpl;
+                                        //var handle = platformImpl.Handle.Handle;
+                                        //var display = Xlib.XOpenDisplay(null);
+                                        ////var root = Xlib.XDefaultRootWindow(display); 
+                                        //Xlib.XGetWindowAttributes(display, (X11.Window)handle, out var attr);
+                                        //var root = attr.root;
+                                        //if (root == X11.Window.None)
+                                        //{
+                                        //    root = Xlib.XDefaultRootWindow(display);
+                                        //}
+
+                                        //Atom stateAbove = Xmu.XmuInternAtom(display, Xmu.XmuMakeAtom("_NET_WM_STATE_ABOVE"));
+                                        //if (stateAbove == Atom.None)
+                                        //{
+                                        //    Console.Error.WriteLine("state above is null");
+                                        //    return;
+                                        //}
+                                        //Atom netState = Xmu.XmuInternAtom(display, Xmu.XmuMakeAtom("_NET_WM_STATE"));
+                                        //if (netState == Atom.None)
+                                        //{
+                                        //    Console.Error.WriteLine("net state is null");
+                                        //    return;
+                                        //}
+                                        //XClientMessageEvent evOnTop = new XClientMessageEvent
+                                        //{
+                                        //    type = (int)Event.ClientMessage,
+                                        //    message_type = netState,
+                                        //    format = 32,
+                                        //    window = (X11.Window)handle,
+                                        //    display = display,
+                                        //};
+
+                                        //var data = new ClientMessageData { l = new int[] { 1, (int)stateAbove, 0, 0, 1 } };
+                                        ////var data = new int[] { 1, (int)stateAbove, 0, 0, 1 };
+                                        ////var dataHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+                                        //int size = Marshal.SizeOf(data.l[0] * data.l.Length);
+                                        //var dataP = Marshal.AllocHGlobal(size);
+                                        ////Marshal.Copy(data.l, 0, dataP, size);
+                                        //Marshal.StructureToPtr(data.l, dataP, false);
+                                        //evOnTop.data = dataP;
+
+                                        //var eventP = Marshal.AllocHGlobal(Marshal.SizeOf(evOnTop));
+                                        //Marshal.StructureToPtr(evOnTop, eventP, false);
+                                        //Xlib.XSendEvent(display, root, true, (long)(EventMask.SubstructureNotifyMask | EventMask.SubstructureRedirectMask), eventP);
+
+                                        //Xlib.XFlush(display);
+
+                                        //Marshal.FreeHGlobal(dataP);
+                                        //Marshal.FreeHGlobal(eventP);
+
+                                    }
+                                    catch (Exception error)
+                                    {
+                                        Console.Error.WriteLine(error);
+                                        throw;
+                                    }
                                 }
                             }
                         }
@@ -140,6 +158,23 @@ namespace Updater
                         DataContext = new MainWindowViewModel(),
                     };
                 }
+            }
+        }
+
+        public static async Task ShowAlert(string msg)
+        {
+            var alert = new AlertWindow();
+            alert.DataContext = new AlertViewModel(msg);
+
+            var desktop = ((IClassicDesktopStyleApplicationLifetime)Current!.ApplicationLifetime!);
+            if (desktop.MainWindow != null)
+            {
+                await alert.ShowDialog(desktop.MainWindow);
+            }
+            else
+            {
+                desktop.MainWindow = alert;
+                desktop.MainWindow.Topmost = true;
             }
         }
     }

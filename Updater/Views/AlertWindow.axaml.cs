@@ -1,0 +1,30 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Markup.Xaml;
+using Avalonia.ReactiveUI;
+using ReactiveUI;
+using System.Windows.Input;
+using Updater.ViewModels;
+using System;
+
+namespace Updater.Views
+{
+    public partial class AlertWindow : ReactiveWindow<AlertViewModel>
+    {
+        
+
+        public AlertWindow()
+        {
+            InitializeComponent();
+#if DEBUG
+            this.AttachDevTools();
+#endif
+            this.WhenActivated(d => d(ViewModel!.Ok.Subscribe((_)=> Close())));
+        }
+
+        private void InitializeComponent()
+        {
+            AvaloniaXamlLoader.Load(this);
+        }
+    }
+}

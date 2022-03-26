@@ -38,6 +38,37 @@ namespace Updater.Services
             var appName = Settings.Default.AppName;
             var appFolder = Settings.Default.ClientAppPath;
 
+            // ================ Safe-Gaurd Init core config first ======================
+
+            bool exit = false;
+            if (string.IsNullOrWhiteSpace(server))
+            {
+                await App.ShowAlert("Please config server URI first.");
+                exit = true;
+            }
+            else if (!Uri.TryCreate(server, UriKind.Absolute, out var uri))
+            {
+                await App.ShowAlert("The update server is not valid URI.");
+                exit = true;
+            }
+            if (string.IsNullOrWhiteSpace(appName))
+            {
+                await App.ShowAlert("Please config app name first.");
+                exit = true;
+            }
+            if (string.IsNullOrWhiteSpace(appFolder))
+            {
+                await App.ShowAlert("Please config the app folder path first.");
+                exit = true;
+            }
+
+            if (exit)
+            {
+                return true;
+            }
+
+            // ====================================================================
+
             DateTimeOffset? lastMod = null;
             string? version = null;
 

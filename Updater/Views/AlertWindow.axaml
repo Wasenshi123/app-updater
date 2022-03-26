@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="Updater.Views.AlertWindow"
+        Title="Alert"
+		WindowStartupLocation="CenterScreen">
+	<Panel>
+		<Viewbox Margin="20">
+			<Panel>
+				<DockPanel Height="100" Margin="50">
+					<Button DockPanel.Dock="Bottom"
+							Command="{Binding Ok}"
+							Width="50"
+							HorizontalContentAlignment="Center"
+							HorizontalAlignment="Center">
+						Ok
+					</Button>
+					<Label Classes="wrap" Content="{Binding Message}"></Label>
+				</DockPanel>
+			</Panel>
+		</Viewbox>
+	</Panel>
+</Window>
