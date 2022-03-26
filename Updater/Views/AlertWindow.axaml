@@ -7,7 +7,7 @@
         Title="Alert"
 		WindowStartupLocation="CenterScreen">
 	<Panel>
-		<Viewbox Margin="20">
+		<Viewbox>
 			<Panel>
 				<DockPanel Height="100" Margin="50">
 					<Button DockPanel.Dock="Bottom"

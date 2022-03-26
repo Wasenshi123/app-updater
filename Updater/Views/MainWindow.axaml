@@ -16,51 +16,53 @@
     </Design.DataContext>
 
 	<Panel>
-		<Viewbox Margin="40">
-			<DockPanel Height="350">
-				<StackPanel Orientation="Horizontal" 
-							Spacing="20" 
+		<Viewbox >
+			<Panel>
+				<DockPanel Height="350" Margin="20">
+					<StackPanel Orientation="Horizontal"
+								Spacing="20"
+								HorizontalAlignment="Center"
+								DockPanel.Dock="Bottom">
+						<Button
+							HorizontalContentAlignment="Center"
 							HorizontalAlignment="Center"
-							DockPanel.Dock="Bottom">
-					<Button
-						HorizontalContentAlignment="Center"
-						HorizontalAlignment="Center"
-						FontSize="20"
-						Width="100"
-						Command="{Binding SaveConfig}">
-						Save
-					</Button>
-					<Button
-						HorizontalContentAlignment="Center"
-						HorizontalAlignment="Center"
-						FontSize="20"
-						Width="80"
-						Command="{Binding Close}">
-						Close
-					</Button>
-				</StackPanel>
-				
-				<StackPanel Spacing="20" Width="600">
-					<DockPanel>
-						<Label VerticalContentAlignment="Center">App Path:</Label>
-						<Button DockPanel.Dock="Right" Command="{Binding Find}">
-							<PathIcon Data="{StaticResource folder_open_regular}"></PathIcon>
+							FontSize="20"
+							Width="100"
+							Command="{Binding SaveConfig}">
+							Save
 						</Button>
-						<TextBox Text="{Binding AppPath}" ></TextBox>
-						
-					</DockPanel>
-					<DockPanel>
-						<Label VerticalContentAlignment="Center">App Name:</Label>
-						<TextBox Text="{Binding AppName}"></TextBox>
-					</DockPanel>
-					<DockPanel>
-						<Label VerticalContentAlignment="Center">Update Server:</Label>
-						<TextBox Text="{Binding Server}"></TextBox>
-					</DockPanel>
-					<CheckBox IsChecked="{Binding IsFullscreen}">Show in Fullscreen</CheckBox>
-					<CheckBox IsChecked="{Binding AutoReboot}">Auto reboot after finish</CheckBox>
-				</StackPanel>
-			</DockPanel>
+						<Button
+							HorizontalContentAlignment="Center"
+							HorizontalAlignment="Center"
+							FontSize="20"
+							Width="80"
+							Command="{Binding Close}">
+							Close
+						</Button>
+					</StackPanel>
+
+					<StackPanel Spacing="20" Width="600">
+						<DockPanel>
+							<Label VerticalContentAlignment="Center">App Path:</Label>
+							<Button DockPanel.Dock="Right" Command="{Binding Find}">
+								<PathIcon Data="{StaticResource folder_open_regular}"></PathIcon>
+							</Button>
+							<TextBox Text="{Binding AppPath}" ></TextBox>
+
+						</DockPanel>
+						<DockPanel>
+							<Label VerticalContentAlignment="Center">App Name:</Label>
+							<TextBox Text="{Binding AppName}"></TextBox>
+						</DockPanel>
+						<DockPanel>
+							<Label VerticalContentAlignment="Center">Update Server:</Label>
+							<TextBox Text="{Binding Server}"></TextBox>
+						</DockPanel>
+						<CheckBox IsChecked="{Binding IsFullscreen}">Show in Fullscreen</CheckBox>
+						<CheckBox IsChecked="{Binding AutoReboot}">Auto reboot after finish</CheckBox>
+					</StackPanel>
+				</DockPanel>
+			</Panel>
 		</Viewbox>
 	</Panel>
 

@@ -99,7 +99,12 @@ namespace Updater.Services
 
             var url = $"{server}/update/{appName}/check";
 
-            var result = await url.PostAsync(JsonContent.Create(new { Version = version, Modified = lastMod, Checksum = checksum }));
+            var result = await url.AllowAnyHttpStatus().PostAsync(JsonContent.Create(new { Version = version, Modified = lastMod, Checksum = checksum }));
+            if (result.StatusCode != (int)HttpStatusCode.OK)
+            {
+                await App.ShowAlert("Error on calling server. Please contact administrator.");
+                return true;
+            }
             var uptodate = await result.GetJsonAsync<bool>();
 
             if (!uptodate)
