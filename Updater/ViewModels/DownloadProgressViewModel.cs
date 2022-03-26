@@ -28,6 +28,7 @@ namespace Updater.ViewModels
 
         public bool IsFailed { get => isFailed; set => this.RaiseAndSetIfChanged(ref isFailed, value); }
         public ReactiveCommand<Unit, string?> Retry { get; private set; }
+        public bool AutoReboot => Settings.Default.AutoReboot;
 
         public DownloadProgressViewModel()
         {

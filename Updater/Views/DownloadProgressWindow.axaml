@@ -33,6 +33,7 @@
 					<Label HorizontalContentAlignment="Center"
 						   HorizontalAlignment="Center"
 						   Margin="0,50,0,0"
+						   IsVisible="{Binding AutoReboot}"
 				   >
 						The system will automatically reboot after finish updating
 					</Label>
