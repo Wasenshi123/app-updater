@@ -79,8 +79,8 @@ namespace Updater
                                 };
                                 desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                                 desktop.MainWindow.Topmost = true;
-                                desktop.MainWindow.Show();
 
+                                desktop.MainWindow.Show();
                                 desktop.MainWindow.SetAlwaysOnTop();
                             }
                         }

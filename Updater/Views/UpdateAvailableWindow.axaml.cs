@@ -28,10 +28,12 @@ namespace Updater.Views
 
         public override void Show()
         {
-            var screenSize = (Application.Current!.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)!
-                    .MainWindow.Screens.Primary.Bounds;
-            Width = screenSize.Width * 0.5f;
-            Height = screenSize.Height * 0.5f;
+            var screenSize = Screens?.Primary?.Bounds;
+            if (screenSize.HasValue)
+            {
+                Width = screenSize.Value.Width * 0.5f;
+                Height = screenSize.Value.Height * 0.5f;
+            }
 
             base.Show();
 

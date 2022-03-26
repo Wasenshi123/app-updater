@@ -115,9 +115,10 @@ namespace Updater.Services
             if (!string.IsNullOrWhiteSpace(currentFile))
             {
                 AlreadyDownloaded = true;
+                return CheckVersion(lastVersion, currentFile);
             }
 
-            return CheckVersion(lastVersion, currentFile);
+            return true;
         }
 
 

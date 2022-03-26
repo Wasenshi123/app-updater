@@ -9,7 +9,7 @@
 	<Panel>
 		<Viewbox>
 			<Panel>
-				<DockPanel Height="100" Margin="50">
+				<DockPanel Height="100" Width="350" Margin="50">
 					<Button DockPanel.Dock="Bottom"
 							Command="{Binding Ok}"
 							Width="50"
@@ -17,7 +17,9 @@
 							HorizontalAlignment="Center">
 						Ok
 					</Button>
-					<Label Classes="wrap" Content="{Binding Message}"></Label>
+					<Label Classes="wrap" 
+						   HorizontalContentAlignment="Center" 
+						   Content="{Binding Message}"></Label>
 				</DockPanel>
 			</Panel>
 		</Viewbox>
