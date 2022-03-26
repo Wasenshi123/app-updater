@@ -6,6 +6,7 @@ using ReactiveUI;
 using System.Windows.Input;
 using Updater.ViewModels;
 using System;
+using Updater.Utils;
 
 namespace Updater.Views
 {
@@ -25,6 +26,13 @@ namespace Updater.Views
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
+        }
+
+        public override void Show()
+        {
+            base.Show();
+
+            this.SetWindowStartupLocationWorkaround();
         }
     }
 }

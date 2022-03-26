@@ -86,7 +86,10 @@ namespace Updater
                         }
                         else
                         {
-                            desktop.Shutdown();
+                            if (desktop.MainWindow == null)
+                            {
+                                desktop.Shutdown();
+                            }
                         }
                     }
                 }
@@ -115,6 +118,8 @@ namespace Updater
                 desktop.MainWindow = alert;
                 desktop.MainWindow.Topmost = true;
                 desktop.MainWindow.SetAlwaysOnTop();
+
+                desktop.MainWindow.Show();
             }
         }
     }
