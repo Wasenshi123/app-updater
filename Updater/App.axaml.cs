@@ -17,6 +17,8 @@ namespace Updater
 {
     public partial class App : Application
     {
+
+        private bool error = false;
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
@@ -57,7 +59,7 @@ namespace Updater
                         // 1st output : Detect output as bool in target app (the calling app)
                         Console.Out.WriteLine(upToDate);
 
-                        if (!upToDate)
+                        if (!upToDate && !error)
                         {
                             if (commanlineArgs.Any(x => x.Replace("-", "") == "force" || x.Replace("-", "") == "f"))
                             {
@@ -105,6 +107,7 @@ namespace Updater
 
         public static async Task ShowAlert(string msg)
         {
+            (Current as App)!.error = true;
             var alert = new AlertWindow();
             alert.DataContext = new AlertViewModel(msg);
 

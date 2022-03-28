@@ -64,7 +64,7 @@ namespace Updater.Services
 
             if (exit)
             {
-                return true;
+                return false;
             }
 
             // ====================================================================
@@ -99,26 +99,35 @@ namespace Updater.Services
 
             var url = $"{server}/update/{appName}/check";
 
-            var result = await url.AllowAnyHttpStatus().WithTimeout(3).PostAsync(JsonContent.Create(new { Version = version, Modified = lastMod, Checksum = checksum }));
-            if (result.StatusCode != (int)HttpStatusCode.OK)
+            try
             {
-                await App.ShowAlert("Error on calling server. Please contact administrator.");
+                var result = await url.AllowAnyHttpStatus().WithTimeout(3).PostAsync(JsonContent.Create(new { Version = version, Modified = lastMod, Checksum = checksum }));
+                if (result.StatusCode != (int)HttpStatusCode.OK)
+                {
+                    await App.ShowAlert("Error on calling server. Please contact administrator.");
+                    return true;
+                }
+                var uptodate = await result.GetJsonAsync<bool>();
+
+                if (!uptodate)
+                {
+                    return false;
+                }
+
+                if (!string.IsNullOrWhiteSpace(currentFile))
+                {
+                    AlreadyDownloaded = true;
+                    return CheckVersion(lastVersion, currentFile);
+                }
+
                 return true;
             }
-            var uptodate = await result.GetJsonAsync<bool>();
-
-            if (!uptodate)
+            catch (FlurlHttpTimeoutException)
             {
+                await App.ShowAlert("Error on calling server. Please contact administrator.");
                 return false;
             }
-
-            if (!string.IsNullOrWhiteSpace(currentFile))
-            {
-                AlreadyDownloaded = true;
-                return CheckVersion(lastVersion, currentFile);
-            }
-
-            return true;
+            
         }
 
 
