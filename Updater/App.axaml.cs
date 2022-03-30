@@ -80,9 +80,10 @@ namespace Updater
                                     DataContext = new UpdateAvailableViewModel()
                                 };
                                 desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                                desktop.MainWindow.Topmost = true;
 
                                 desktop.MainWindow.Show();
+
+                                desktop.MainWindow.Topmost = true;
                                 desktop.MainWindow.SetAlwaysOnTop();
                             }
                         }
@@ -119,10 +120,11 @@ namespace Updater
             else
             {
                 desktop.MainWindow = alert;
-                desktop.MainWindow.Topmost = true;
-                desktop.MainWindow.SetAlwaysOnTop();
 
                 desktop.MainWindow.Show();
+
+                desktop.MainWindow.Topmost = true;
+                desktop.MainWindow.SetAlwaysOnTop();
             }
         }
     }
