@@ -15,7 +15,12 @@ namespace Updater.Utils
         {
             var path = CheckAndReturnFile(error_log_filename);
 
-            string errorTxt = $"{DateTimeOffset.Now}: {msg} || {e.Message} || {e.InnerException}";
+            string errorTxt = $"{DateTimeOffset.Now}: {msg} || {e.Message}";
+            if (e.InnerException != null)
+            {
+                errorTxt += $" || {e.InnerException}";
+            }
+            errorTxt += "\n\n";
 
             File.AppendAllText(path, errorTxt);
         }

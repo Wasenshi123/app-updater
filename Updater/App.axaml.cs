@@ -40,6 +40,7 @@ namespace Updater
 
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
+                desktop.ShutdownMode = ShutdownMode.OnLastWindowClose;
                 if (commanlineArgs.Length > 0)
                 {
                     if (commanlineArgs.Any(x => x == "check" || x == "c"))
@@ -89,9 +90,14 @@ namespace Updater
                         }
                         else
                         {
-                            if (desktop.MainWindow == null)
+                            if (desktop.Windows.Count == 0)
                             {
+                                Console.WriteLine("exiting...");
+                                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                                 desktop.Shutdown();
+
+                                //not close? force requesting to exit!
+                                Environment.Exit(0);
                             }
                         }
                     }

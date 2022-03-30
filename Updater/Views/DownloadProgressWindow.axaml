@@ -47,7 +47,10 @@
 						DockPanel.Dock="Bottom"
 						FontSize="22"
 						Width="100"
-						Command="{Binding Download}">
+						Command="{Binding Retry}"
+						HorizontalContentAlignment="Center"
+						HorizontalAlignment="Center"
+						>
 						Retry
 					</Button>
 					<Label FontSize="16" Classes="wrap">
