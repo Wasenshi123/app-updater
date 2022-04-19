@@ -11,12 +11,12 @@ namespace Updater.Utils
     {
 
         public const string error_log_filename = "error.log";
-        public static void LogError(string msg, Exception e)
+        public static void LogError(string msg, Exception? e = null)
         {
             var path = CheckAndReturnFile(error_log_filename);
 
-            string errorTxt = $"{DateTimeOffset.Now}: {msg} || {e.Message}";
-            if (e.InnerException != null)
+            string errorTxt = $"{DateTimeOffset.Now}: {msg} || {e?.Message}";
+            if (e?.InnerException != null)
             {
                 errorTxt += $" || {e.InnerException}";
             }

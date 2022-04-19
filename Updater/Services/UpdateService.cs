@@ -155,18 +155,28 @@ namespace Updater.Services
 
             var url = $"{server}/update/{appName}/download";
 
-            var req = WebRequest.Create(url);
-            using (var res = req.GetResponse())
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = delegate
             {
-                long totalToReceive = res.ContentLength;
+                return true;
+            };
+
+            var client = new HttpClient(handler);
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+
+            using (var res = await client.GetAsync(url))
+            {
+                long? totalToReceive = res.Content.Headers.ContentLength;
                 long totalDownloaded = 0;
-                string fileName = res.Headers["Content-Disposition"]?
-                    .Split(';').FirstOrDefault(x => x.Contains("filename"))?
-                    .Split("=").Last() ?? "unknown.gz";
-                var lastModified = DateTime.Parse(res.Headers["Last-Modified"]!);
+                string fileName = res.Content.Headers.ContentDisposition?.FileName ?? "unknown.gz";
+                var lastModified = res.Content.Headers.LastModified!.Value.UtcDateTime;
                 string filePath = Path.Combine(downloadPath, fileName);
-                using (var stream = res.GetResponseStream())
+                using (var stream = await res.Content.ReadAsStreamAsync())
                 {
+                    if (!totalToReceive.HasValue)
+                    {
+                        totalToReceive = stream.Length;
+                    }
                     const int step = 1024; // buffer size, progress step set at 1 kb
                     var buffer = new byte[step];
                     using (var sw = File.Create(filePath))
@@ -185,7 +195,7 @@ namespace Updater.Services
                             {
                                 Dispatcher.UIThread.Post(() =>
                                 {
-                                    onUpdateProgress?.Invoke(totalDownloaded, totalToReceive, (float)percent);
+                                    onUpdateProgress?.Invoke(totalDownloaded, totalToReceive.Value , (float)percent);
                                 });
                                 timer.Restart();
                             }
