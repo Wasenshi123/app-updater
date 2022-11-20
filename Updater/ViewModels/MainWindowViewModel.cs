@@ -37,7 +37,7 @@ namespace Updater.ViewModels
             {
 
                 Settings.Default.ClientAppPath = AppPath;
-                Settings.Default.UpdateServer = string.IsNullOrWhiteSpace(Server) ? "" : ("http://" + Regex.Replace(Server, @"(https?://)", ""));
+                Settings.Default.UpdateServer = string.IsNullOrWhiteSpace(Server) ? "" : (Regex.IsMatch(Server, @"^https?://") ? Server : "http://" + Server);
                 Settings.Default.AppName = AppName;
                 Settings.Default.ProgressFullscreen = IsFullscreen;
                 Settings.Default.AutoReboot = AutoReboot;

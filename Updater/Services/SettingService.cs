@@ -55,7 +55,7 @@ namespace Updater.Services
             object converted = value;
             if (key == nameof(Settings.Default.UpdateServer))
             {
-                converted = string.IsNullOrWhiteSpace(value) ? "" : ("http://" + Regex.Replace(value, @"(https?://)", ""));
+                converted = string.IsNullOrWhiteSpace(value) ? "" : (Regex.IsMatch(value, @"^https?://") ? value : "http://" + value);
             }
             else if (key == nameof(Settings.Default.AutoReboot) || key == nameof(Settings.Default.ProgressFullscreen))
             {
