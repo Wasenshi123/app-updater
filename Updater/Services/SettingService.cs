@@ -62,6 +62,7 @@ namespace Updater.Services
                 converted = Convert.ToBoolean(value);
             }
             Settings.Default[key] = converted;
+            Settings.Default.Save();
         }
 
         public bool IsSettingCommand(string arg)
