@@ -24,6 +24,8 @@ namespace Updater.Views
                 if (!string.IsNullOrWhiteSpace(filePath))
                 {
                     Dispatcher.UIThread.Post(() => ViewModel.StartExtract(filePath).Subscribe((extracted) =>
+                    {
+                        if (string.IsNullOrWhiteSpace(extracted)) return;
                         Dispatcher.UIThread.Post(() => ViewModel.CleanAndFinish(extracted, filePath).Subscribe((_) =>
                         {
                             // 3rd output : Use this output code to detect in calling app thread, eg. to auto re-start/run the updated instance
@@ -44,8 +46,8 @@ namespace Updater.Views
                                     "shutdown /r /t:0".Cmd();
                                 }
                             }
-                        }))
-                    ));
+                        }));
+                    }));
                 }
             })));
         }

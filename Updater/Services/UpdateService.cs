@@ -13,6 +13,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Updater.Properties;
+using Updater.Utils;
 using UpdaterLib;
 
 namespace Updater.Services
@@ -81,11 +82,7 @@ namespace Updater.Services
             {
                 var fileInfo = new FileInfo(currentFile);
                 lastMod = fileInfo.LastWriteTimeUtc;
-                var splits = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('-');
-                if (splits.Length > 1)
-                {
-                    version = splits.Last();
-                }
+                version = GetVersionFromFileName(currentFile);
                 checksum = GetMD5HashFromFile(currentFile);
             }
             else
@@ -104,6 +101,8 @@ namespace Updater.Services
                 var result = await url.AllowAnyHttpStatus().WithTimeout(3).PostAsync(JsonContent.Create(new { Version = version, Modified = lastMod, Checksum = checksum }));
                 if (result.StatusCode != (int)HttpStatusCode.OK)
                 {
+                    var res = await result.ResponseMessage.Content.ReadAsStringAsync();
+                    Logger.LogError($"error calling server ({result.StatusCode}): {res}");
                     await App.ShowAlert("Error on calling server. Please contact administrator.");
                     return true;
                 }
@@ -300,22 +299,60 @@ namespace Updater.Services
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(output));
 
-                    using (var fs = File.Create(output))
+                    int retry = 0;
+                    while (true)
                     {
-                        var blob = new byte[size];
-                        bytesRead += await stream.ReadAsync(blob, 0, blob.Length);
-                        await fs.WriteAsync(blob, 0, blob.Length);
-
-                        var percent = (double)bytesRead / total * 100;
-                        if (timer.ElapsedMilliseconds > 16.65 || percent == 100) // throttle to maintain FPS at 60 (1000ms/60 = 16.66ms)
+                        try
                         {
-                            Dispatcher.UIThread.Post(() =>
+                            using (var fs = File.Create(output))
                             {
-                                onProgress?.Invoke(bytesRead, total, (float)percent);
-                            });
-                            timer.Restart();
+                                var blob = new byte[size];
+                                bytesRead += await stream.ReadAsync(blob, 0, blob.Length);
+                                await fs.WriteAsync(blob, 0, blob.Length);
+
+                                var percent = (double)bytesRead / total * 100;
+                                if (timer.ElapsedMilliseconds > 16.65 || percent == 100) // throttle to maintain FPS at 60 (1000ms/60 = 16.66ms)
+                                {
+                                    Dispatcher.UIThread.Post(() =>
+                                    {
+                                        onProgress?.Invoke(bytesRead, total, (float)percent);
+                                    });
+                                    timer.Restart();
+                                }
+                            }
+
+                            break;
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.LogError("extract error", e);
+                            await Task.Delay(TimeSpan.FromMilliseconds(250));
+                            retry++;
+                            if (retry > 2)
+                            {
+                                try
+                                {
+                                    // try forcefully close the file
+                                    var processName = GetFileProcessName(output);
+                                    Console.WriteLine($"process name to kill: {processName}");
+                                    if (processName != null)
+                                    {
+                                        var p = Process.GetProcessesByName(processName).FirstOrDefault();
+                                        p?.Kill();
+                                    }
+                                }
+                                catch (Exception killError)
+                                {
+                                    Logger.LogError("kill process error", killError);
+                                }
+                            }
+                            if (retry > 8)
+                            {
+                                throw;
+                            }
                         }
                     }
+                    
                 }
 
                 var pos = stream.Position;
@@ -344,8 +381,7 @@ namespace Updater.Services
             if (lastVersion != null && !string.IsNullOrWhiteSpace(currentfile))
             {
                 var fileInfo = new FileInfo(currentfile);
-                var splits = Path.GetFileNameWithoutExtension(currentfile).Split('-');
-                var latestVersion = splits.Length > 1 ? splits.Last().Replace(".tar", "") : null;
+                var latestVersion = GetVersionFromFileName(currentfile);
                 if (latestVersion != null && !string.IsNullOrWhiteSpace(lastVersion.Version)
                     && Version.Parse(lastVersion.Version) < Version.Parse(latestVersion))
                 {
@@ -361,12 +397,49 @@ namespace Updater.Services
             return true;
         }
 
+        public static string? GetVersionFromFileName(string filePath)
+        {
+            var splits = Path.GetFileNameWithoutExtension(filePath).Split('-');
+            return splits.Length > 1 ? splits.Last().Replace(".tar", "") : null;
+        }
+
         private static string? GetCurrentFile()
         {
             var currentFile = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "*.tar.gz")
                 .OrderByDescending(x => new FileInfo(x).LastWriteTimeUtc)
                 .FirstOrDefault();
             return currentFile;
+        }
+
+        public static string GetFileProcessName(string filePath)
+        {
+            if (OperatingSystem.IsLinux())
+            {
+                string fileName = Path.GetFileName(filePath);
+
+                return fileName;
+            }
+            else
+            {
+                Process[] procs = Process.GetProcesses();
+                string fileName = Path.GetFileName(filePath);
+
+                foreach (Process proc in procs)
+                {
+                    if (proc.MainWindowHandle != new IntPtr(0) && !proc.HasExited)
+                    {
+                        ProcessModule[] arr = new ProcessModule[proc.Modules.Count];
+
+                        foreach (ProcessModule pm in proc.Modules)
+                        {
+                            if (pm.ModuleName == fileName)
+                                return proc.ProcessName;
+                        }
+                    }
+                }
+            }
+
+            return null;
         }
     }
 }

@@ -59,7 +59,7 @@ namespace Updater.ViewModels
             });
         }
 
-        public IObservable<string> StartExtract(string sourcePath)
+        public IObservable<string?> StartExtract(string sourcePath)
         {
             return Observable.StartAsync(async () =>
             {
@@ -76,8 +76,12 @@ namespace Updater.ViewModels
                 {
                     Logger.LogError("extract failed", e);
                     Console.WriteLine($"Failed extracting: {e}");
-                    throw;
+
+                    isFailed = true;
+
+                    return null;
                 }
+                
             });
         }
 
@@ -115,8 +119,7 @@ namespace Updater.ViewModels
                     Console.WriteLine("Save version and clean up...");
                     File.Delete(extracted);
                     var info = new FileInfo(sourcePath);
-                    var splits = Path.GetFileNameWithoutExtension(info.Name).Split('-');
-                    var version = splits.Length > 1 ? splits.Last().Replace(".tar", "") : null;
+                    var version = UpdateService.GetVersionFromFileName(info.Name);
                     Console.WriteLine($"modified: {info.LastWriteTimeUtc}");
 
                     var newVersion = new UpdateInfo

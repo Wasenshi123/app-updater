@@ -15,10 +15,14 @@ namespace Updater.Utils
         {
             var path = CheckAndReturnFile(error_log_filename);
 
-            string errorTxt = $"{DateTimeOffset.Now}: {msg} || {e?.Message}";
+            string errorTxt = $"{DateTimeOffset.Now}: {msg} || {e?.Message ?? "-"}";
             if (e?.InnerException != null)
             {
                 errorTxt += $" || {e.InnerException}";
+            }
+            if (!string.IsNullOrWhiteSpace(e?.StackTrace))
+            {
+                errorTxt += $"\n{e?.StackTrace}";
             }
             errorTxt += "\n\n";
 
