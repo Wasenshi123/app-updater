@@ -53,8 +53,11 @@
 						>
 						Retry
 					</Button>
-					<Label FontSize="16" Classes="wrap">
+					<Label FontSize="16" Classes="wrap" IsVisible="{Binding !IsDownloaded}">
 						Download failed. Please check the server and connection, or contact administrator.
+					</Label>
+					<Label FontSize="16" Classes="wrap" IsVisible="{Binding IsDownloaded}">
+						Installation failed. Please try to install again or contact administrator.
 					</Label>
 				</DockPanel>
 			</Panel>

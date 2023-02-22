@@ -21,12 +21,14 @@ namespace Updater.ViewModels
         private string progressTxt;
         private string labelTxt;
         private bool isFailed;
+        private bool downloaded;
 
         public float Percent { get => percent; set => this.RaiseAndSetIfChanged(ref percent, value); }
         public string ProgressTxt { get => progressTxt; set => this.RaiseAndSetIfChanged(ref progressTxt, value); }
         public string LabelTxt { get => labelTxt; set => this.RaiseAndSetIfChanged(ref labelTxt, value); }
 
         public bool IsFailed { get => isFailed; set => this.RaiseAndSetIfChanged(ref isFailed, value); }
+        public bool IsDownloaded { get => downloaded; set => this.RaiseAndSetIfChanged(ref downloaded, value); }
         public ReactiveCommand<Unit, string?> Retry { get; private set; }
         public bool AutoReboot => Settings.Default.AutoReboot;
 
@@ -45,6 +47,7 @@ namespace Updater.ViewModels
                     var update = new UpdateService();
                     var filePath = await update.Download(OnDownloadProgress);
                     Console.WriteLine($"download complete! file: {filePath}");
+                    IsDownloaded = true;
 
                     return filePath;
                 }
@@ -77,7 +80,7 @@ namespace Updater.ViewModels
                     Logger.LogError("extract failed", e);
                     Console.WriteLine($"Failed extracting: {e}");
 
-                    isFailed = true;
+                    IsFailed = true;
 
                     return null;
                 }
