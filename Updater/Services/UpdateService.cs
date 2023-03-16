@@ -297,14 +297,12 @@ namespace Updater.Services
 
                 var output = Path.Combine(outputDir, name);
 
-                bool error = false;
                 if (size > 0) // ignores directory entries
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(output));
 
-                    error = true; // set flag here, and reset it on success
                     int retry = 0;
-                    while (retry <12)
+                    while (true)
                     {
                         try
                         {
@@ -312,37 +310,7 @@ namespace Updater.Services
                             {
                                 var blob = new byte[size];
                                 bytesRead += await stream.ReadAsync(blob, 0, blob.Length);
-
-                                retry = 0;
-                                while (retry < 20)
-                                {
-                                    try
-                                    {
-                                        await fs.WriteAsync(blob, 0, blob.Length);
-                                        error = false; // success, reset the flag
-                                        break;
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        Logger.LogError($"extract error (attempt: {++retry})", e);
-                                        await Task.Delay(TimeSpan.FromMilliseconds(250));
-                                        try
-                                        {
-                                            // try to forcefully close the file
-                                            var processName = GetFileProcessName(output);
-                                            Console.WriteLine($"process name to kill: {processName}");
-                                            if (processName != null)
-                                            {
-                                                var p = Process.GetProcessesByName(processName).FirstOrDefault();
-                                                p?.Kill();
-                                            }
-                                        }
-                                        catch (Exception killError)
-                                        {
-                                            Logger.LogError("kill process error", killError);
-                                        }
-                                    }
-                                }
+                                await fs.WriteAsync(blob, 0, blob.Length);
 
                                 var percent = (double)bytesRead / total * 100;
                                 if (timer.ElapsedMilliseconds > 16.65 || percent == 100) // throttle to maintain FPS at 60 (1000ms/60 = 16.66ms)
@@ -354,20 +322,39 @@ namespace Updater.Services
                                     timer.Restart();
                                 }
                             }
+
+                            break;
                         }
                         catch (Exception e)
                         {
-                            Logger.LogError($"read while extract error (attempt: {++retry})", e);
+                            Logger.LogError($"read while extract error (attempt: {retry + 1})", e);
                             await Task.Delay(TimeSpan.FromMilliseconds(250));
-
+                            retry++;
+                            if (retry > 2)
+                            {
+                                try
+                                {
+                                    // try to forcefully close the file
+                                    var processName = GetFileProcessName(output);
+                                    Console.WriteLine($"process name to kill: {processName}");
+                                    if (processName != null)
+                                    {
+                                        var p = Process.GetProcessesByName(processName).FirstOrDefault();
+                                        p?.Kill();
+                                    }
+                                }
+                                catch (Exception killError)
+                                {
+                                    Logger.LogError("kill process error", killError);
+                                }
+                            }
+                            if (retry > 8)
+                            {
+                                throw;
+                            }
                         }
                     }
-                    
-                }
 
-                if (error)
-                {
-                    throw new Exception("Attempts to install reached maximum.");
                 }
 
                 var pos = stream.Position;
