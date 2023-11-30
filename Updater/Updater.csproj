@@ -28,7 +28,7 @@
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="0.10.12" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="0.10.12" />
     <PackageReference Include="Avalonia.X11" Version="0.10.12" />
-    <PackageReference Include="Flurl.Http" Version="3.2.2" />
+    <PackageReference Include="FluentHttpClient" Version="2.1.0" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.0" />
     <PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
     <PackageReference Include="System.Runtime.Extensions" Version="4.3.1" />

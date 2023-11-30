@@ -2,14 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Flurl.Http;
 using System;
 using System.Linq;
-using System.Net;
-using System.Net.Security;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading;
 using System.Threading.Tasks;
 using Updater.Properties;
 using Updater.Services;
@@ -44,8 +38,6 @@ namespace Updater
 
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                FlurlHttp.Configure(c => c.HttpClientFactory = new CustomHttpClientFactory());
-
                 desktop.ShutdownMode = ShutdownMode.OnLastWindowClose;
                 if (commanlineArgs.Length > 0)
                 {

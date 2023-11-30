@@ -1,6 +1,6 @@
 ﻿using Avalonia;
 using Avalonia.Threading;
-using Flurl.Http;
+using FluentHttpClient;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -99,16 +99,23 @@ namespace Updater.Services
             int statusCode = 0;
             try
             {
-                var result = await url.AllowAnyHttpStatus().WithTimeout(3).PostAsync(JsonContent.Create(new { Version = version, Modified = lastMod, Checksum = checksum }));
-                if (result.StatusCode != (int)HttpStatusCode.OK)
+                var client = new HttpClient(new HttpClientHandler
                 {
-                    var res = await result.ResponseMessage.Content.ReadAsStringAsync();
-                    statusCode = result.StatusCode;
-                    Logger.LogError($"error calling server ({statusCode}): {res}");
-                    await App.ShowAlert($"Error on calling server ({statusCode}). Please contact administrator.");
-                    return true;
-                }
-                var uptodate = await result.GetJsonAsync<bool>();
+                    AllowAutoRedirect = true,
+                    CheckCertificateRevocationList = false,
+                    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                });
+                var uptodate = await client.UsingRoute(url)
+                    .WithJsonContent(new { Version = version, Modified = lastMod, Checksum = checksum })
+                    .WithRequestTimeout(5)
+                    .PostAsync()
+                    .OnFailureAsync(async (res) =>
+                    {
+                        statusCode = (int)res.StatusCode;
+                        Logger.LogError($"error calling server ({statusCode}): {await res.GetResponseStringAsync()}");
+                        await App.ShowAlert($"Error on calling server ({statusCode}). Please contact administrator.");
+                    }, false)
+                    .DeserializeJsonAsync<bool>();
 
                 if (!uptodate)
                 {
@@ -123,7 +130,14 @@ namespace Updater.Services
 
                 return true;
             }
-            catch (FlurlHttpTimeoutException)
+            catch (HttpRequestException)
+            {
+                return false;
+            }
+            catch (Exception ex) when (
+                ex is TaskCanceledException ||
+                ex is TimeoutException
+            )
             {
                 await App.ShowAlert($"Error on calling server ({statusCode}). Please contact administrator.");
                 return false;
