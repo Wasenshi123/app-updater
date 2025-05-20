@@ -1,0 +1,9 @@
+check update (GUI):
+run .exe check
+
+setting (GUI):
+run .exe
+
+command line setting:
+run .exe -s EnablePreReleaseVersion=true ProgressFullscreen=false AutoReboot=true
+run .exe --set UpdateServer=https://domain.com ClientAppPath=target/folder AppName=MyAppName

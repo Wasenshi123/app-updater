@@ -2,28 +2,32 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="450"
         x:Class="Updater.Views.UpdateAvailableWindow"
         Title="Update Available">
-	<Panel Margin="10,20,10,20">
-		<StackPanel VerticalAlignment="Center" Spacing="30">
-			<StackPanel Spacing="10">
-				<TextBlock FontSize="16" FontWeight="Bold" HorizontalAlignment="Center">Version Information</TextBlock>
-				<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="5">
-					<TextBlock>Current version:</TextBlock>
-					<TextBlock Text="{Binding CurrentVersion}" />
+	<Viewbox>
+		<Panel VerticalAlignment="Center" HorizontalAlignment="Center">
+		
+			<StackPanel VerticalAlignment="Center" Spacing="30" Margin="30,10,30,10">
+				<StackPanel Spacing="10">
+					<TextBlock FontSize="16" FontWeight="Bold" HorizontalAlignment="Center">Version Information</TextBlock>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="5">
+						<TextBlock>Current version:</TextBlock>
+						<TextBlock Text="{Binding CurrentVersion}" />
+					</StackPanel>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="5">
+						<TextBlock>Latest version:</TextBlock>
+						<TextBlock Text="{Binding LatestVersion}" FontWeight="Bold" />
+					</StackPanel>
 				</StackPanel>
-				<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="5">
-					<TextBlock>Latest version:</TextBlock>
-					<TextBlock Text="{Binding LatestVersion}" FontWeight="Bold" />
+
+				<Label FontSize="16" Classes="wrap" HorizontalAlignment="Center">New update is available. Do you want to download and install?</Label>
+				<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20">
+					<Button FontSize="22" Width="100" HorizontalContentAlignment="Center" Command="{Binding Confirm}">Yes</Button>
+					<Button FontSize="22" Width="100" HorizontalContentAlignment="Center" Command="{Binding Cancel}">No</Button>
 				</StackPanel>
 			</StackPanel>
-			
-			<Label FontSize="16" Classes="wrap" HorizontalAlignment="Center">New update is available. Do you want to download and install?</Label>
-			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20">
-				<Button FontSize="22" Width="100" HorizontalContentAlignment="Center" Command="{Binding Confirm}">Yes</Button>
-				<Button FontSize="22" Width="100" HorizontalContentAlignment="Center" Command="{Binding Cancel}">No</Button>
-			</StackPanel>
-		</StackPanel>
-	</Panel>
+
+		</Panel>
+	</Viewbox>
 </Window>
