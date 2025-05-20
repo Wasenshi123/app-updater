@@ -57,7 +57,9 @@ namespace Updater.Services
             {
                 converted = string.IsNullOrWhiteSpace(value) ? "" : (Regex.IsMatch(value, @"^https?://") ? value : "http://" + value);
             }
-            else if (key == nameof(Settings.Default.AutoReboot) || key == nameof(Settings.Default.ProgressFullscreen))
+            else if (key == nameof(Settings.Default.AutoReboot) || 
+                     key == nameof(Settings.Default.ProgressFullscreen) ||
+                     key == nameof(Settings.Default.EnablePreReleaseVersions))
             {
                 converted = Convert.ToBoolean(value);
             }

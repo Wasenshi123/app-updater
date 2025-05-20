@@ -22,6 +22,19 @@ namespace Updater.Services
     {
         public static bool AlreadyDownloaded = false;
 
+        public class VersionInfo
+        {
+            public string? Version { get; set; }
+            public string? File { get; set; }
+            public DateTimeOffset LastModified { get; set; }
+        }
+
+        public class LatestVersionInfo
+        {
+            public VersionInfo? Stable { get; set; }
+            public VersionInfo? PreRelease { get; set; }
+        }
+
         public static string GetMD5HashFromFile(string fileName)
         {
             using (var md5 = MD5.Create())
@@ -30,6 +43,42 @@ namespace Updater.Services
                 {
                     return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", string.Empty);
                 }
+            }
+        }
+
+        public async Task<LatestVersionInfo?> GetLatestVersionInfo()
+        {
+            var server = Settings.Default.UpdateServer;
+            var appName = Settings.Default.AppName;
+            var includePreRelease = Settings.Default.EnablePreReleaseVersions;
+
+            if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(appName))
+            {
+                return null;
+            }
+
+            var url = $"{server}/update/{appName}/latest-info?includePreRelease={includePreRelease}";
+
+            try
+            {
+                var client = new HttpClient(new HttpClientHandler
+                {
+                    AllowAutoRedirect = true,
+                    CheckCertificateRevocationList = false,
+                    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                });
+                
+                var response = await client.UsingRoute(url)
+                    .WithRequestTimeout(5)
+                    .GetAsync()
+                    .DeserializeJsonAsync<LatestVersionInfo>();
+                
+                return response;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error getting latest version info: {ex.Message}");
+                return null;
             }
         }
 
@@ -94,8 +143,9 @@ namespace Updater.Services
                 }
             }
 
-            var url = $"{server}/update/{appName}/check";
-
+            var includePreRelease = Settings.Default.EnablePreReleaseVersions;
+            var url = $"{server}/update/{appName}/check?includePreRelease={includePreRelease}";
+            
             int statusCode = 0;
             try
             {
@@ -142,7 +192,6 @@ namespace Updater.Services
                 await App.ShowAlert($"Error on calling server ({statusCode}). Please contact administrator.");
                 return false;
             }
-            
         }
 
 
@@ -168,7 +217,8 @@ namespace Updater.Services
                 return currentFile;
             }
 
-            var url = $"{server}/update/{appName}/download";
+            var includePreRelease = Settings.Default.EnablePreReleaseVersions;
+            var url = $"{server}/update/{appName}/download?includePreRelease={includePreRelease}";
 
             var handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = delegate

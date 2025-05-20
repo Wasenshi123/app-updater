@@ -76,7 +76,10 @@ namespace Updater
                             {
                                 desktop.MainWindow = new UpdateAvailableWindow
                                 {
-                                    DataContext = new UpdateAvailableViewModel()
+                                    DataContext = new UpdateAvailableViewModel(
+                                        currentVersion: Settings.Default.LastVersion?.Version ?? "Unknown",
+                                        latestVersion: await GetLatestVersionInfo(service)
+                                    )
                                 };
                                 desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
@@ -130,6 +133,27 @@ namespace Updater
                 desktop.MainWindow.Topmost = true;
                 desktop.MainWindow.SetAlwaysOnTop();
             }
+        }
+
+        private static async Task<string> GetLatestVersionInfo(UpdateService service)
+        {
+            try
+            {
+                var latestInfo = await service.GetLatestVersionInfo();
+                if (latestInfo != null)
+                {
+                    if (Settings.Default.EnablePreReleaseVersions && latestInfo.PreRelease != null)
+                    {
+                        return latestInfo.PreRelease.Version ?? "Unknown";
+                    }
+                    return latestInfo.Stable?.Version ?? "Unknown";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting latest version info: {ex.Message}");
+            }
+            return "Unknown";
         }
     }
 }

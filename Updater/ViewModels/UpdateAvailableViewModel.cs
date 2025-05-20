@@ -10,11 +10,17 @@ namespace Updater.ViewModels
 {
     public class UpdateAvailableViewModel: ViewModelBase
     {
+        private string currentVersion;
+        private string latestVersion;
+
         public ReactiveCommand<Unit, Unit> Confirm { get; }
         public ReactiveCommand<Unit, Unit> Cancel { get; }
 
-        public UpdateAvailableViewModel()
+        public UpdateAvailableViewModel(string currentVersion, string latestVersion)
         {
+            this.currentVersion = currentVersion;
+            this.latestVersion = latestVersion;
+
             Confirm = ReactiveCommand.Create(() =>
             {
                 // 2nd output : Use this output code to detect it in the target app, eg. to automatically close the running instance
@@ -38,5 +44,8 @@ namespace Updater.ViewModels
 
             Cancel = ReactiveCommand.Create(() => { });
         }
+
+        public string CurrentVersion { get => currentVersion; }
+        public string LatestVersion { get => latestVersion; }
     }
 }

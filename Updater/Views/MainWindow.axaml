@@ -60,6 +60,7 @@
 						</DockPanel>
 						<CheckBox IsChecked="{Binding IsFullscreen}">Show in Fullscreen</CheckBox>
 						<CheckBox IsChecked="{Binding AutoReboot}">Auto reboot after finish</CheckBox>
+						<CheckBox IsChecked="{Binding EnablePreReleaseVersions}">Enable pre-release versions</CheckBox>
 					</StackPanel>
 				</DockPanel>
 			</Panel>

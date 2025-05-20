@@ -18,6 +18,7 @@ namespace Updater.ViewModels
         private string appName;
         private bool isFullscreen;
         private bool autoReboot;
+        private bool enablePreReleaseVersions;
 
         public ICommand SaveConfig { get; }
         public ICommand Find { get; }
@@ -32,6 +33,7 @@ namespace Updater.ViewModels
             AppName = Settings.Default.AppName;
             IsFullscreen = Settings.Default.ProgressFullscreen;
             AutoReboot = Settings.Default.AutoReboot;
+            EnablePreReleaseVersions = Settings.Default.EnablePreReleaseVersions;
 
             SaveConfig = ReactiveCommand.Create(() =>
             {
@@ -41,6 +43,7 @@ namespace Updater.ViewModels
                 Settings.Default.AppName = AppName;
                 Settings.Default.ProgressFullscreen = IsFullscreen;
                 Settings.Default.AutoReboot = AutoReboot;
+                Settings.Default.EnablePreReleaseVersions = EnablePreReleaseVersions;
 
                 Settings.Default.Save();
                 Settings.Default.Reload();
@@ -65,6 +68,7 @@ namespace Updater.ViewModels
         public string Server { get => server; set => this.RaiseAndSetIfChanged(ref server, value); }
         public bool IsFullscreen { get => isFullscreen; set => this.RaiseAndSetIfChanged(ref isFullscreen, value); }
         public bool AutoReboot { get => autoReboot; set => this.RaiseAndSetIfChanged(ref autoReboot, value); }
+        public bool EnablePreReleaseVersions { get => enablePreReleaseVersions; set => this.RaiseAndSetIfChanged(ref enablePreReleaseVersions, value); }
 
         public Interaction<Unit, string?> FindFolder { get; }
     }

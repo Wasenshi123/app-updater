@@ -93,5 +93,17 @@ namespace Updater.Properties {
                 this["ProgressFullscreen"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnablePreReleaseVersions {
+            get {
+                return ((bool)(this["EnablePreReleaseVersions"]));
+            }
+            set {
+                this["EnablePreReleaseVersions"] = value;
+            }
+        }
     }
 }
