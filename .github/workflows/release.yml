@@ -1,0 +1,216 @@
+name: Release Manager
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, reopened]
+    branches:
+      - main
+
+jobs:
+  update_release_draft_publish:
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      resolved_version: ${{ steps.release.outputs.resolved_version }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    permissions:
+      # write permission is required to create a github release
+      contents: write
+      # write permission is required for autolabeler
+      # otherwise, read permission is required at least
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      # (Optional) GitHub Enterprise requires GHE_HOST variable set
+      #- name: Set GHE_HOST
+      #  run: |
+      #    echo "GHE_HOST=${GITHUB_SERVER_URL##https:\/\/}" >> $GITHUB_ENV
+
+      # Determine whether to publish the release draft based on the branch name
+      - name: Set Publish Variable
+        id: set-publish
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "PUBLISH=true" >> $GITHUB_ENV
+          else
+            echo "PUBLISH=false" >> $GITHUB_ENV
+          fi
+        shell: bash
+      - name: Determine Branch Name
+        id: determine_branch
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { GITHUB_EVENT_NAME, GITHUB_REF, GITHUB_HEAD_REF } = process.env;
+            let branchName = '';
+
+            if (GITHUB_EVENT_NAME === 'push') {
+              // For push events, determine the branch name
+              branchName = GITHUB_REF.replace('refs/heads/', '');
+              // Check if this push event is a merge commit
+              const { data: commits } = await github.rest.repos.listCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: branchName,
+                per_page: 1
+              });
+              const commit = commits[0];
+              if (commit && commit.commit && commit.commit.message.includes('Merge pull request')) {
+                // Extract the PR number from the commit message
+                const prNumberMatch = commit.commit.message.match(/Merge pull request #(\d+)/);
+                if (prNumberMatch) {
+                  const prNumber = prNumberMatch[1];
+                  // Get the PR details
+                  const { data: pr } = await github.rest.pulls.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: parseInt(prNumber, 10)
+                  });
+                  branchName = pr.head.ref;
+                }
+              }
+            } else if (GITHUB_EVENT_NAME === 'pull_request') {
+              // For pull request events, use the source branch
+              branchName = GITHUB_HEAD_REF;
+            } else {
+              core.setFailed(`Unsupported event type: ${GITHUB_EVENT_NAME}`);
+            }
+
+            console.log(`branch name: ${branchName}`);
+            return branchName;
+
+      - name: Extract Version
+        id: extract
+        run: |
+          BRANCH_NAME="${{ steps.determine_branch.outputs.result }}"
+          echo "branch name: $BRANCH_NAME"
+
+          if [[ $BRANCH_NAME =~ ^(release|rel|hotfix)/(.*)$ ]]; then
+            VERSION_PART=${BASH_REMATCH[2]}
+
+            # Regular expression to find a version-like substring within VERSION_PART
+            VERSION_REGEX='[0-9]+(\.[0-9]+)+([-a-zA-Z0-9.]*)?'
+
+            if [[ $VERSION_PART =~ $VERSION_REGEX ]]; then
+              # Extract the matched version substring
+              VERSION=${BASH_REMATCH[0]}
+              echo "version: $VERSION"
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+            else
+              echo "version=" >> $GITHUB_OUTPUT
+            fi
+            echo "release=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=" >> $GITHUB_OUTPUT
+            echo "release=" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Set base branch
+        id: set_base_branch
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "BASE_BRANCH=${{ github.event.pull_request.head.ref }}" >> $GITHUB_ENV
+          else
+            echo "BASE_BRANCH=${{ github.ref }}" >> $GITHUB_ENV
+          fi
+
+      # Drafts your next Release notes as Pull Requests are merged into "main" or "release/*"
+      - name: write release
+        id: release
+        uses: release-drafter/release-drafter@v6
+        # (Optional) specify config name to use, relative to .github/. Default: release-drafter.yml
+        with:
+          # (Optional) specify config name to use, relative to .github/. Default: release-drafter.yml
+          # config-name: ${{ steps.extract.outputs.config_name }}
+          version: ${{ steps.extract.outputs.version }}
+          # disable-autolabeler: true
+          publish: ${{ env.PUBLISH }}
+          commitish: ${{ env.BASE_BRANCH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  update-version:
+    needs: update_release_draft_publish
+    if: ${{ github.ref_name != 'main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update version in version.json & Updater.csproj
+        run: |
+          VERSION=${{ needs.update_release_draft_publish.outputs.resolved_version }}
+          JSON_PATH="version.json"
+          if [ -f "$JSON_PATH" ]; then
+            sed -i.bak 's/"version": "[^"]*"/"version": "'"$VERSION"'"/' "$JSON_PATH"
+          else
+            echo "{\"version\": \"$VERSION\"}" > "$JSON_PATH"
+          fi
+          
+          # Update Version in csproj
+          sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|g" Updater/Updater.csproj
+
+        shell: bash
+      - name: Commit changes and push
+        run: |
+          git fetch origin ${GITHUB_HEAD_REF}
+          git checkout ${GITHUB_HEAD_REF}
+          git pull origin ${GITHUB_HEAD_REF}
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add version.json Updater/Updater.csproj
+          git commit -m "Update version to ${{ needs.update_release_draft_publish.outputs.resolved_version }}"
+          git push origin ${GITHUB_HEAD_REF}
+        shell: bash
+      - name: Update PR title
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const versionTag = "${{ needs.update_release_draft_publish.outputs.tag_name }}";
+            const newTitle = `${prTitle} (${versionTag})`;
+            const prNumber = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+  
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: prNumber,
+              title: newTitle
+            });
+
+  sync-develop:
+    needs: update_release_draft_publish
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Assuming Updater project follows a similar flow, otherwise this job might fail if develop branch doesn't exist
+      # For now, I'll comment out the merge to develop part or check if branch exists, but matching HemoCheckIn logic:
+      - name: Merge main into develop
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Check if develop branch exists remotely
+          if git ls-remote --heads origin develop | grep develop; then
+            git checkout develop
+            git pull origin develop
+            git merge --no-ff origin/main -m "Merge main back into develop after release ${{ needs.update_release_draft_publish.outputs.tag_name }}"
+            git push origin develop
+          else
+             echo "develop branch does not exist, skipping sync."
+          fi
+        shell: bash

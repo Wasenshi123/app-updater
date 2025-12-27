@@ -1,0 +1,67 @@
+version: 2.1
+
+jobs:
+  publish:
+    docker:
+      - image: mcr.microsoft.com/dotnet/sdk:6.0
+    steps:
+      - checkout
+      - run:
+          name: Build and publish
+          command: |
+             # Extract version from tag (e.g., v1.0.0 -> 1.0.0)
+             if [ -n "$CIRCLE_TAG" ]; then
+               VERSION=${CIRCLE_TAG#v}
+             else
+               VERSION="1.0.0" 
+             fi
+             echo "Building version: $VERSION"
+             
+             # Build for linux-arm, not self-contained, pass Version
+             dotnet publish ./Updater/Updater.csproj -r linux-arm -c Release --self-contained false -p:Version=$VERSION
+      - run:
+          name: Package
+          command: |
+             mkdir /Updater
+             
+             # Extract version again or use previous
+             if [ -n "$CIRCLE_TAG" ]; then
+               VERSION=${CIRCLE_TAG#v}
+             else
+               VERSION="1.0.0" 
+             fi
+             
+             cd ./Updater/bin/Release/net6.0/linux-arm/publish
+             tar -czvf /Updater/updater-${VERSION}.tar.gz .
+      - store_artifacts:
+          path: /Updater
+
+workflows:
+  publish_artifact:
+    jobs:
+      - publish:
+          filters:
+            branches:
+              ignore: /.*/  # Ignore all branches
+            tags:
+              only:
+                - /^v.*/    # Only run on v* tags
+      - publish_approval:   # Manual trigger option for non-tags? Or matching HemoCheckIn logic
+          type: approval
+          filters:
+            branches:
+              ignore:
+                - main
+                - /^(release|rel|alpha|beta)\/.*/
+            tags:
+               ignore: /.*/
+      - publish:
+          requires:
+            - publish_approval
+          filters:
+             branches:
+               ignore:
+                 - main
+                 - /^(release|rel|alpha|beta)\/.*/
+             tags:
+               ignore: /.*/

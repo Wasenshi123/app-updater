@@ -1,0 +1,64 @@
+name-template: 'v$RESOLVED_VERSION 🌈'
+tag-template: 'v$RESOLVED_VERSION'
+categories:
+  - title: '🚀 Features'
+    labels:
+      - '✨ feature'
+      - '🎨 enhancement'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - '🚑️ fix'
+      - 'bug'
+  - title: '⚡️ Performance'
+    labels:
+      - '⚡️ performance'
+  - title: '🔒 Security'
+    labels:
+      - '🔒 security'
+  - title: '🧰 Maintenance'
+    labels:
+      - '🧹 chore'
+      - '🔧 refactor'
+  - title: '📝 Documentation'
+    labels:
+      - '📝 documentation'
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
+replacers:
+  - search: '/\[?\s*HEM-(\d{1,4}),?\s*\]?\s*-?\s*/g'
+    replace: ''
+  - search: '/([Ff]eature|[Ff]eat|[Rr]efactor|[Ff]ix|[Hh]otfix|[Cc]hore|doc|docs)\//g'
+    replace: ''
+exclude-labels:
+  - 'skip-changelog'
+  - 'dependencies'
+exclude-contributors:
+  - 'github-actions[bot]'
+  - 'sm-lark[bot]'
+  - 'sm-argo[bot]'
+version-resolver:
+  major:
+    labels:
+      - 'major'
+  minor:
+    labels:
+      - 'minor'
+      - '✨ feature'
+  patch:
+    labels:
+      - 'patch'
+  default: patch
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+header: |
+  # AppUpdater Changelog
+
+  All notable changes to this project will be documented in this file.
+
+footer: |
+  ### Contributors
+
+  $CONTRIBUTORS
