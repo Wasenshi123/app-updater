@@ -29,6 +29,11 @@ namespace Updater.Utils
             File.AppendAllText(path, errorTxt);
         }
 
+        public static void LogInfo(string msg)
+        {
+            Console.WriteLine(msg);
+        }
+
         private static string CheckAndReturnFile(string filename, int increment = 0)
         {
             string file = filename;

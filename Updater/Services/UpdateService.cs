@@ -21,6 +21,8 @@ namespace Updater.Services
     public class UpdateService
     {
         public static bool AlreadyDownloaded = false;
+        public static bool UseManifestSystem = false;
+        public static UpgradeInfoWrapper? CurrentUpgradeInfo = null;
 
         public class VersionInfo
         {
@@ -67,6 +69,10 @@ namespace Updater.Services
                     CheckCertificateRevocationList = false,
                     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
                 });
+                
+                // Add User-Agent header for updater version detection
+                var updaterVersion = GetUpdaterVersion();
+                client.DefaultRequestHeaders.Add("User-Agent", $"AppUpdater/{updaterVersion}");
                 
                 var response = await client.UsingRoute(url)
                     .WithRequestTimeout(5)
@@ -144,6 +150,56 @@ namespace Updater.Services
             }
 
             var includePreRelease = Settings.Default.EnablePreReleaseVersions;
+            
+            // Try New Manifest System First
+            try 
+            {
+                // Only if we have a version to check from
+                if (!string.IsNullOrEmpty(version))
+                {
+                    var client = new HttpClient(new HttpClientHandler
+                    {
+                        AllowAutoRedirect = true,
+                        CheckCertificateRevocationList = false,
+                        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                    });
+                    
+                    var updaterVersion = GetUpdaterVersion();
+                    client.DefaultRequestHeaders.Add("User-Agent", $"AppUpdater/{updaterVersion}");
+
+                    var checkUpgradesUrl = $"{server}/update/{appName}/check-upgrades?includePrerelease={includePreRelease}";
+                    var response = await client.PostAsJsonAsync(checkUpgradesUrl, new { Version = version, Modified = lastMod, Checksum = checksum });
+                    
+                    if (response.StatusCode == HttpStatusCode.OK) 
+                    {
+                        var upgradeInfo = await response.Content.ReadFromJsonAsync<UpgradeInfoWrapper>();
+                        if (upgradeInfo != null && upgradeInfo.RequiresDownload)
+                        {
+                             UseManifestSystem = true;
+                             CurrentUpgradeInfo = upgradeInfo;
+                             Logger.LogInfo("New Manifest System: Upgrades available.");
+                             return false; // NOT up to date
+                        }
+                        if (response.StatusCode == HttpStatusCode.NoContent)
+                        {
+                            return true; // Up to date
+                        }
+                    } 
+                    else if (response.StatusCode != HttpStatusCode.NotFound) 
+                    {
+                        // Some other error, log it but fall through to old system?
+                        Logger.LogError($"Check upgrades failed with {response.StatusCode}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                 Logger.LogError($"Check upgrades exception: {ex.Message}");
+                 // Fallback to old system
+            }
+
+
+            // Fallback to Old System
             var url = $"{server}/update/{appName}/check?includePreRelease={includePreRelease}";
             
             int statusCode = 0;
@@ -155,6 +211,10 @@ namespace Updater.Services
                     CheckCertificateRevocationList = false,
                     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
                 });
+                
+                var updaterVersion = GetUpdaterVersion();
+                client.DefaultRequestHeaders.Add("User-Agent", $"AppUpdater/{updaterVersion}");
+                
                 var uptodate = await client.UsingRoute(url)
                     .WithJsonContent(new { Version = version, Modified = lastMod, Checksum = checksum })
                     .WithRequestTimeout(5)
@@ -169,6 +229,7 @@ namespace Updater.Services
 
                 if (!uptodate)
                 {
+                    UseManifestSystem = false;
                     return false;
                 }
 
@@ -196,6 +257,7 @@ namespace Updater.Services
 
 
         public delegate void OnProgress(long currentSize, long totalSize, float percent);
+        public delegate void OnInstallProgress(long currentSize, long totalSize, float percent);
 
         public async Task<string> Download(OnProgress onUpdateProgress)
         {
@@ -203,9 +265,9 @@ namespace Updater.Services
             var appName = Settings.Default.AppName;
             var downloadPath = AppDomain.CurrentDomain.BaseDirectory;
 
-            // if already downloaded skip download again
+            // if already downloaded skip download again (Only for old system or if filename matches)
             string? currentFile = GetCurrentFile();
-            if (!string.IsNullOrWhiteSpace(currentFile) && AlreadyDownloaded)
+            if (!UseManifestSystem && !string.IsNullOrWhiteSpace(currentFile) && AlreadyDownloaded)
             {
                 Console.WriteLine("Already downloaded, so skip and extract current file...");
                 var info = new FileInfo(currentFile);
@@ -218,7 +280,16 @@ namespace Updater.Services
             }
 
             var includePreRelease = Settings.Default.EnablePreReleaseVersions;
-            var url = $"{server}/update/{appName}/download?includePreRelease={includePreRelease}";
+            string url;
+            
+            if (UseManifestSystem && CurrentUpgradeInfo != null)
+            {
+                 url = $"{server}/update/{appName}/download-upgrade?fromVersion={CurrentUpgradeInfo.CurrentVersion}&includePrerelease={includePreRelease}";
+            }
+            else
+            {
+                 url = $"{server}/update/{appName}/download?includePreRelease={includePreRelease}";
+            }
 
             var handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = delegate
@@ -228,13 +299,16 @@ namespace Updater.Services
 
             var client = new HttpClient(handler);
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+            
+            var updaterVersion = GetUpdaterVersion();
+            client.DefaultRequestHeaders.Add("User-Agent", $"AppUpdater/{updaterVersion}");
 
             using (var res = await client.GetAsync(url))
             {
                 long? totalToReceive = res.Content.Headers.ContentLength;
                 long totalDownloaded = 0;
-                string fileName = res.Content.Headers.ContentDisposition?.FileName ?? "unknown.gz";
-                var lastModified = res.Content.Headers.LastModified!.Value.UtcDateTime;
+                string fileName = res.Content.Headers.ContentDisposition?.FileName ?? (UseManifestSystem ? "upgrade-package.tar.gz" : "unknown.gz");
+                var lastModified = res.Content.Headers.LastModified?.UtcDateTime ?? DateTime.UtcNow;
                 string filePath = Path.Combine(downloadPath, fileName);
                 using (var stream = await res.Content.ReadAsStreamAsync())
                 {
@@ -242,7 +316,7 @@ namespace Updater.Services
                     {
                         totalToReceive = stream.Length;
                     }
-                    const int step = 1024; // buffer size, progress step set at 1 kb
+                    const int step = 1024; 
                     var buffer = new byte[step];
                     using (var sw = File.Create(filePath))
                     {
@@ -256,7 +330,7 @@ namespace Updater.Services
 
                             sw.Write(buffer, 0, read);
                             var percent = (double)totalDownloaded / totalToReceive * 100;
-                            if (timer.ElapsedMilliseconds > 16.65 || percent == 100) // throttle to maintain FPS at 60 (1000ms/60 = 16.66ms)
+                            if (timer.ElapsedMilliseconds > 16.65 || percent == 100)
                             {
                                 Dispatcher.UIThread.Post(() =>
                                 {
@@ -276,7 +350,7 @@ namespace Updater.Services
             }
         }
 
-        public async Task<string> ExtractTarballFile(string filePath, string destinationPath, OnProgress onExtractProgress, OnProgress onInstallProgress)
+        public async Task<string> ExtractTarballFile(string filePath, string destinationPath, OnProgress onExtractProgress, OnInstallProgress onInstallProgress)
         {
             Directory.CreateDirectory(destinationPath);
             var extractedFile = Path.Combine(destinationPath, Path.GetFileNameWithoutExtension(filePath));
@@ -297,7 +371,7 @@ namespace Updater.Services
                     fs.Write(buffer, 0, read);
 
                     var percent = (double)progressStream.BytesRead / total * 100;
-                    if (timer.ElapsedMilliseconds > 16.65 || percent == 100) // throttle to maintain FPS at 60 (1000ms/60 = 16.66ms)
+                    if (timer.ElapsedMilliseconds > 16.65 || percent == 100)
                     {
                         Dispatcher.UIThread.Post(() =>
                         {
@@ -317,12 +391,191 @@ namespace Updater.Services
             // Installing (.tar expanding)
             using (FileStream fs = File.OpenRead(extractedFile))
             {
-                await ExtractTar(fs, destinationPath, onInstallProgress);
+                await ExtractTar(fs, destinationPath, (c, t, p) => onInstallProgress?.Invoke(c, t, p));
+            }
+            
+            // CHECK FOR UPGRADE PACKAGE
+            var packageManifestPath = Path.Combine(destinationPath, "package-manifest.json");
+            if (File.Exists(packageManifestPath))
+            {
+                Console.WriteLine("Manifest package detected. Applying upgrades...");
+                await ApplyUpgrades(destinationPath, packageManifestPath);
+                // Clean up? ApplyUpgrades handles it.
             }
 
             return extractedFile;
         }
 
+        private async Task ApplyUpgrades(string destinationPath, string packageManifestPath)
+        {
+            try 
+            {
+                var json = await File.ReadAllTextAsync(packageManifestPath);
+                var manifest = System.Text.Json.JsonSerializer.Deserialize<UpgradePackageManifest>(json);
+                if (manifest == null || manifest.Upgrades == null) return;
+                
+                var upgradesDir = Path.Combine(destinationPath, "upgrades");
+
+                foreach (var upgradeId in manifest.Upgrades)
+                {
+                    // Find upgrade folder
+                    var upgradePath = Path.Combine(upgradesDir, upgradeId);
+                    var upgradeManifestPath = Path.Combine(upgradePath, "manifest.json");
+
+                    if (!File.Exists(upgradeManifestPath))
+                    {
+                        Logger.LogError($"Manifest for upgrade {upgradeId} not found at {upgradeManifestPath}");
+                        continue;
+                    }
+
+                    var upgradeManifestJson = await File.ReadAllTextAsync(upgradeManifestPath);
+                    var upgradeManifest = System.Text.Json.JsonSerializer.Deserialize<UpgradeManifest>(upgradeManifestJson);
+                    
+                    if (upgradeManifest == null) continue;
+                    
+                    // Scripts (Pre)
+                    if (!string.IsNullOrEmpty(upgradeManifest.PreInstallScript))
+                    {
+                        var scriptPath = Path.Combine(upgradePath, upgradeManifest.PreInstallScript);
+                        if (File.Exists(scriptPath))
+                        {
+                            Logger.LogInfo($"Running PreInstallScript: {upgradeManifest.PreInstallScript}");
+                            RunScript(scriptPath, upgradePath, destinationPath);
+                        }
+                    }
+
+                    // Files (Binaries & Configs)
+                    if (upgradeManifest.Files != null)
+                    {
+                        foreach (var file in upgradeManifest.Files)
+                        {
+                            if (string.IsNullOrEmpty(file.Path)) continue;
+                            
+                            var sourceFile = Path.Combine(upgradePath, file.Path);
+                            var targetPath = Path.Combine(destinationPath, file.Target ?? "");
+                            
+                            // Ensure target dir exists
+                            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+                            
+                            if (File.Exists(sourceFile))
+                            {
+                                if (file.Explode)
+                                {
+                                    using (var fs = File.OpenRead(sourceFile))
+                                    {
+                                        if (sourceFile.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            using (var gzip = new GZipStream(fs, CompressionMode.Decompress))
+                                            {
+                                                await ExtractTar(gzip, targetPath);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            await ExtractTar(fs, targetPath);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    File.Copy(sourceFile, targetPath, true);
+                                    if (OperatingSystem.IsLinux()) 
+                                    {
+                                        if (!string.IsNullOrEmpty(file.Permissions))
+                                        {
+                                            Chmod(targetPath, file.Permissions);
+                                        }
+                                        else if (file.IsExecutable)
+                                        {
+                                            Chmod(targetPath, "+x");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Scripts (Post)
+                    if (!string.IsNullOrEmpty(upgradeManifest.PostInstallScript))
+                    {
+                        var scriptPath = Path.Combine(upgradePath, upgradeManifest.PostInstallScript);
+                        if (File.Exists(scriptPath))
+                        {
+                            Logger.LogInfo($"Running PostInstallScript: {upgradeManifest.PostInstallScript}");
+                            RunScript(scriptPath, upgradePath, destinationPath);
+                        }
+                    }
+                }
+                
+                // Cleanup
+                File.Delete(packageManifestPath);
+                if (Directory.Exists(upgradesDir)) Directory.Delete(upgradesDir, true);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error applying upgrades", ex);
+                throw;
+            }
+        }
+
+        private void RunScript(string scriptPath, string workingDir, string destinationPath)
+        {
+            try
+            {
+                var info = new ProcessStartInfo
+                {
+                    WorkingDirectory = workingDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                // Add destination path as argument
+                var args = $"\"{destinationPath}\"";
+
+                if (OperatingSystem.IsLinux())
+                {
+                    // Ensure script is executable
+                    Chmod(scriptPath, "+x");
+                    
+                    info.FileName = "/bin/bash";
+                    info.Arguments = $"\"{scriptPath}\" {args}";
+                }
+                else
+                {
+                    // Windows - assume batch or just run it
+                    info.FileName = scriptPath;
+                    info.Arguments = args;
+                }
+                
+                using (var process = Process.Start(info))
+                {
+                    process.OutputDataReceived += (sender, e) => { if (e.Data != null) Logger.LogInfo($"[Script Output] {e.Data}"); };
+                    process.ErrorDataReceived += (sender, e) => { if (e.Data != null) Logger.LogError($"[Script Error] {e.Data}"); };
+                    
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    
+                    process.WaitForExit();
+                    
+                    if (process.ExitCode != 0)
+                    {
+                        throw new Exception($"Script exited with code {process.ExitCode}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to run script {scriptPath}", ex);
+                throw;
+            }
+        }
+        // ... (Remaining methods ExtractTar, CheckVersion, GetVersionFromFileName, GetCurrentFile, GetFileProcessName, GetUpdaterVersion) ...
+        // Need to copy them because replace_file_content replaces the whole class content if I select the whole class.
+        // I will let the tool fill the rest if I use start/end line or be careful.
+        // Wait, I chose to replace the whole class. I need to include the rest of the methods.
+        
         public static async Task ExtractTar(Stream stream, string outputDir, OnProgress? onProgress = null)
         {
             var buffer = new byte[100];
@@ -361,7 +614,7 @@ namespace Updater.Services
 
                 var output = Path.Combine(outputDir, name);
 
-                if (size > 0) // ignores directory entries
+                if (size > 0) 
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(output));
 
@@ -377,7 +630,7 @@ namespace Updater.Services
                                 await fs.WriteAsync(blob, 0, blob.Length);
 
                                 var percent = (double)bytesRead / total * 100;
-                                if (timer.ElapsedMilliseconds > 16.65 || percent == 100) // throttle to maintain FPS at 60 (1000ms/60 = 16.66ms)
+                                if (timer.ElapsedMilliseconds > 16.65 || percent == 100) 
                                 {
                                     Dispatcher.UIThread.Post(() =>
                                     {
@@ -398,7 +651,6 @@ namespace Updater.Services
                             {
                                 try
                                 {
-                                    // try to forcefully close the file
                                     var processName = GetFileProcessName(output);
                                     Console.WriteLine($"process name to kill: {processName}");
                                     if (processName != null)
@@ -436,11 +688,9 @@ namespace Updater.Services
             });
         }
 
-
-        // ================== Utils =========================
         private static bool CheckVersion(UpdateInfo? lastVersion, string? currentfile)
         {
-            if (lastVersion == null) // This mean first time update case.
+            if (lastVersion == null)
             {
                 return false;
             }
@@ -506,6 +756,38 @@ namespace Updater.Services
             }
 
             return null;
+        }
+
+        private static string GetUpdaterVersion()
+        {
+            try
+            {
+                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                var version = assembly.GetName().Version;
+                if (version != null)
+                {
+                    return $"{version.Major}.{version.Minor}.{version.Build}";
+                }
+            }
+            catch
+            {
+            }
+            return "1.0.0";
+        }
+
+        private static void Chmod(string path, string permissions)
+        {
+            try
+            {
+                using (var process = Process.Start("chmod", $"{permissions} \"{path}\""))
+                {
+                    process.WaitForExit();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to chmod {path} to {permissions}", ex);
+            }
         }
     }
 }
