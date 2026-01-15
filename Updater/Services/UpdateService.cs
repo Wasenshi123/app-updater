@@ -125,29 +125,9 @@ namespace Updater.Services
 
             // ====================================================================
 
-            DateTimeOffset? lastMod = null;
-            string? version = null;
-
-            string? checksum = null;
-            var currentFile = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "*.tar.gz")
-                .OrderByDescending(x => new FileInfo(x).LastWriteTimeUtc)
-                .FirstOrDefault();
+            var (version, lastMod, checksum) = GetCurrentVersionInfo();
+            var currentFile = GetCurrentFile();
             var lastVersion = Settings.Default.LastVersion;
-            if (!string.IsNullOrWhiteSpace(currentFile))
-            {
-                var fileInfo = new FileInfo(currentFile);
-                lastMod = fileInfo.LastWriteTimeUtc;
-                version = GetVersionFromFileName(currentFile);
-                checksum = GetMD5HashFromFile(currentFile);
-            }
-            else
-            {
-                if (lastVersion != null)
-                {
-                    lastMod = lastVersion.Modified;
-                    version = lastVersion.Version;
-                }
-            }
 
             var includePreRelease = Settings.Default.EnablePreReleaseVersions;
             
@@ -180,10 +160,12 @@ namespace Updater.Services
                              Logger.LogInfo("New Manifest System: Upgrades available.");
                              return false; // NOT up to date
                         }
-                        if (response.StatusCode == HttpStatusCode.NoContent)
-                        {
-                            return true; // Up to date
-                        }
+                        // If OK but no upgrades needed, fall through to old system check
+                    }
+                    else if (response.StatusCode == HttpStatusCode.NoContent)
+                    {
+                        // Server confirmed no upgrades needed
+                        return true; // Up to date
                     } 
                     else if (response.StatusCode != HttpStatusCode.NotFound) 
                     {
@@ -233,10 +215,11 @@ namespace Updater.Services
                     return false;
                 }
 
+                // Server confirmed we're up to date, trust the server's response
+                // If there's a local file, mark it as already downloaded for potential future use
                 if (!string.IsNullOrWhiteSpace(currentFile))
                 {
                     AlreadyDownloaded = true;
-                    return CheckVersion(lastVersion, currentFile);
                 }
 
                 return true;
@@ -946,6 +929,40 @@ namespace Updater.Services
                 .OrderByDescending(x => new FileInfo(x).LastWriteTimeUtc)
                 .FirstOrDefault();
             return currentFile;
+        }
+
+        /// <summary>
+        /// Gets the current version information (version, modified date, checksum) from either
+        /// a .tar.gz file in the base directory or from settings.
+        /// </summary>
+        private static (string? version, DateTimeOffset? modified, string? checksum) GetCurrentVersionInfo()
+        {
+            var currentFile = GetCurrentFile();
+            var lastVersion = Settings.Default.LastVersion;
+
+            if (!string.IsNullOrWhiteSpace(currentFile))
+            {
+                var fileInfo = new FileInfo(currentFile);
+                var version = GetVersionFromFileName(currentFile);
+                var checksum = GetMD5HashFromFile(currentFile);
+                return (version, fileInfo.LastWriteTimeUtc, checksum);
+            }
+            else if (lastVersion != null)
+            {
+                return (lastVersion.Version, lastVersion.Modified, null);
+            }
+
+            return (null, null, null);
+        }
+
+        /// <summary>
+        /// Gets the current version string for display purposes.
+        /// Returns "Unknown" if no version can be determined.
+        /// </summary>
+        public static string GetCurrentVersionString()
+        {
+            var (version, _, _) = GetCurrentVersionInfo();
+            return version ?? "Unknown";
         }
 
         public static string GetFileProcessName(string filePath)
