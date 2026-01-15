@@ -1,4 +1,4 @@
-﻿using ReactiveUI;
+using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -45,7 +45,60 @@ namespace Updater.ViewModels
                 try
                 {
                     var update = new UpdateService();
+                    
+                    // Determine versions for logging
+                    string? fromVersion = null;
+                    string? toVersion = null;
+                    long? packageSize = null;
+                    
+                    // Try to get current version
+                    var lastVersion = Settings.Default.LastVersion;
+                    if (lastVersion != null)
+                    {
+                        fromVersion = lastVersion.Version;
+                    }
+                    
+                    // Get upgrade info if available
+                    if (UpdateService.UseManifestSystem && UpdateService.CurrentUpgradeInfo != null)
+                    {
+                        fromVersion = UpdateService.CurrentUpgradeInfo.CurrentVersion;
+                        toVersion = UpdateService.CurrentUpgradeInfo.TargetVersion;
+                        packageSize = UpdateService.CurrentUpgradeInfo.PackageSize;
+                    }
+                    
+                    // Start upgrade session
+                    Logger.StartUpgradeSession(fromVersion, toVersion, packageSize);
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Started,
+                        Stage = UpgradeStage.Download,
+                        Message = "Starting download"
+                    });
+                    
                     var filePath = await update.Download(OnDownloadProgress);
+                    
+                    // Get actual file size
+                    if (File.Exists(filePath))
+                    {
+                        var fileInfo = new FileInfo(filePath);
+                        packageSize = fileInfo.Length;
+                        // Try to get version from filename
+                        if (string.IsNullOrEmpty(toVersion))
+                        {
+                            toVersion = UpdateService.GetVersionFromFileName(fileInfo.Name);
+                        }
+                    }
+                    
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Completed,
+                        Stage = UpgradeStage.Download,
+                        Message = $"Download completed: {filePath}",
+                        Details = new Dictionary<string, object> { { "filePath", filePath }, { "size", packageSize ?? 0 } }
+                    });
+                    
                     Console.WriteLine($"download complete! file: {filePath}");
                     IsDownloaded = true;
 
@@ -53,6 +106,15 @@ namespace Updater.ViewModels
                 }
                 catch (Exception e)
                 {
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Failed,
+                        Stage = UpgradeStage.Download,
+                        Message = "Download failed",
+                        Error = e.ToString()
+                    });
+                    Logger.EndUpgradeSession(UpgradeStatus.Failed, e.Message);
                     Logger.LogError("download failed", e);
                 }
 
@@ -69,14 +131,40 @@ namespace Updater.ViewModels
                 try
                 {
                     Console.WriteLine("Start extracting...");
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.InProgress,
+                        Stage = UpgradeStage.Extract,
+                        Message = "Starting extraction and installation"
+                    });
+                    
                     var destination = Settings.Default.ClientAppPath;
                     var update = new UpdateService();
                     var extracted = await update.ExtractTarballFile(sourcePath, destination, OnExtractProgress, OnInstallProgress);
+                    
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Completed,
+                        Stage = UpgradeStage.Extract,
+                        Message = "Extraction and installation completed"
+                    });
+                    
                     Console.WriteLine($"extract and install complete!");
                     return extracted;
                 }
                 catch (Exception e)
                 {
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Failed,
+                        Stage = UpgradeStage.Extract,
+                        Message = "Extraction failed",
+                        Error = e.ToString()
+                    });
+                    Logger.EndUpgradeSession(UpgradeStatus.Failed, e.Message);
                     Logger.LogError("extract failed", e);
                     Console.WriteLine($"Failed extracting: {e}");
 
@@ -120,6 +208,14 @@ namespace Updater.ViewModels
                 try
                 {
                     Console.WriteLine("Save version and clean up...");
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.InProgress,
+                        Stage = UpgradeStage.Cleanup,
+                        Message = "Cleaning up temporary files"
+                    });
+                    
                     File.Delete(extracted);
                     var info = new FileInfo(sourcePath);
                     var version = UpdateService.GetVersionFromFileName(info.Name);
@@ -135,10 +231,30 @@ namespace Updater.ViewModels
 
                     File.Delete(sourcePath);
 
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Completed,
+                        Stage = UpgradeStage.Cleanup,
+                        Message = $"Upgrade completed successfully. New version: {version}"
+                    });
+                    
+                    // End upgrade session with success
+                    Logger.EndUpgradeSession(UpgradeStatus.Completed);
+
                     Console.WriteLine("Saved and Cleaned!");
                 }
                 catch (Exception e)
                 {
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        Status = UpgradeStatus.Failed,
+                        Stage = UpgradeStage.Cleanup,
+                        Message = "Cleanup failed",
+                        Error = e.ToString()
+                    });
+                    Logger.EndUpgradeSession(UpgradeStatus.Failed, e.Message);
                     Logger.LogError("cleanning failed", e);
                     Console.WriteLine($"Failed cleaning: {e}");
                     throw;
