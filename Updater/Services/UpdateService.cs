@@ -775,19 +775,45 @@ namespace Updater.Services
                 throw;
             }
         }
-        // ... (Remaining methods ExtractTar, CheckVersion, GetVersionFromFileName, GetCurrentFile, GetFileProcessName, GetUpdaterVersion) ...
-        // Need to copy them because replace_file_content replaces the whole class content if I select the whole class.
-        // I will let the tool fill the rest if I use start/end line or be careful.
-        // Wait, I chose to replace the whole class. I need to include the rest of the methods.
         
         public static async Task ExtractTar(Stream stream, string outputDir, OnProgress? onProgress = null)
         {
             var buffer = new byte[100];
-            long total = stream.Length;
+            long total = 0;
+            bool hasKnownLength = false;
+            try
+            {
+                total = stream.Length;
+                hasKnownLength = true;
+            }
+            catch (NotSupportedException)
+            {
+                // Stream doesn't support Length (e.g., GZipStream)
+                // Try to get length from underlying stream if available
+                if (stream is GZipStream gzipStream)
+                {
+                    try
+                    {
+                        // Get length from the base stream (compressed file size)
+                        // This is an approximation but better than nothing
+                        total = gzipStream.BaseStream.Length;
+                        hasKnownLength = true;
+                    }
+                    catch
+                    {
+                        // Base stream also doesn't support Length
+                        hasKnownLength = false;
+                    }
+                }
+                else
+                {
+                    hasKnownLength = false;
+                }
+            }
             long bytesRead = 0;
             Dispatcher.UIThread.Post(() =>
             {
-                onProgress?.Invoke(bytesRead, total, 0);
+                onProgress?.Invoke(bytesRead, hasKnownLength ? total : bytesRead, hasKnownLength ? 0f : 0f);
             });
             Stopwatch timer = new Stopwatch();
             timer.Start();
@@ -833,14 +859,29 @@ namespace Updater.Services
                                 bytesRead += await stream.ReadAsync(blob, 0, blob.Length);
                                 await fs.WriteAsync(blob, 0, blob.Length);
 
-                                var percent = (double)bytesRead / total * 100;
-                                if (timer.ElapsedMilliseconds > 16.65 || percent == 100) 
+                                if (hasKnownLength)
                                 {
-                                    Dispatcher.UIThread.Post(() =>
+                                    var percent = (double)bytesRead / total * 100;
+                                    if (timer.ElapsedMilliseconds > 16.65 || percent == 100) 
                                     {
-                                        onProgress?.Invoke(bytesRead, total, (float)percent);
-                                    });
-                                    timer.Restart();
+                                        Dispatcher.UIThread.Post(() =>
+                                        {
+                                            onProgress?.Invoke(bytesRead, total, (float)percent);
+                                        });
+                                        timer.Restart();
+                                    }
+                                }
+                                else
+                                {
+                                    // For streams without known length, just report bytes read
+                                    if (timer.ElapsedMilliseconds > 16.65) 
+                                    {
+                                        Dispatcher.UIThread.Post(() =>
+                                        {
+                                            onProgress?.Invoke(bytesRead, bytesRead, 0f);
+                                        });
+                                        timer.Restart();
+                                    }
                                 }
                             }
 
@@ -888,7 +929,14 @@ namespace Updater.Services
             timer.Stop();
             Dispatcher.UIThread.Post(() =>
             {
-                onProgress?.Invoke(bytesRead, total, (float)100f);
+                if (hasKnownLength)
+                {
+                    onProgress?.Invoke(bytesRead, total, 100f);
+                }
+                else
+                {
+                    onProgress?.Invoke(bytesRead, bytesRead, 0f);
+                }
             });
         }
 
