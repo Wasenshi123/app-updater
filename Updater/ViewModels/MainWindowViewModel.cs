@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Updater.Properties;
+using Updater.Services;
 
 namespace Updater.ViewModels
 {
@@ -69,6 +70,8 @@ namespace Updater.ViewModels
         public bool IsFullscreen { get => isFullscreen; set => this.RaiseAndSetIfChanged(ref isFullscreen, value); }
         public bool AutoReboot { get => autoReboot; set => this.RaiseAndSetIfChanged(ref autoReboot, value); }
         public bool EnablePreReleaseVersions { get => enablePreReleaseVersions; set => this.RaiseAndSetIfChanged(ref enablePreReleaseVersions, value); }
+
+        public string UpdaterVersion => UpdateService.GetUpdaterVersion();
 
         public Interaction<Unit, string?> FindFolder { get; }
     }

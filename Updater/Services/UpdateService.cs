@@ -996,7 +996,7 @@ namespace Updater.Services
             return null;
         }
 
-        private static string GetUpdaterVersion()
+        public static string GetUpdaterVersion()
         {
             try
             {
