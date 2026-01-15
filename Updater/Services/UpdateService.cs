@@ -778,7 +778,7 @@ namespace Updater.Services
         
         public static async Task ExtractTar(Stream stream, string outputDir, OnProgress? onProgress = null)
         {
-            var buffer = new byte[100];
+            var buffer = new byte[512];
             long total = 0;
             bool hasKnownLength = false;
             try
@@ -811,76 +811,118 @@ namespace Updater.Services
                 }
             }
             long bytesRead = 0;
+            Directory.CreateDirectory(outputDir);
             Dispatcher.UIThread.Post(() =>
             {
                 onProgress?.Invoke(bytesRead, hasKnownLength ? total : bytesRead, hasKnownLength ? 0f : 0f);
             });
             Stopwatch timer = new Stopwatch();
             timer.Start();
+
             while (true)
             {
-                stream.Read(buffer, 0, 100);
-
-                var name = Encoding.ASCII.GetString(buffer).Trim('\0', ' ');
-                if (string.IsNullOrWhiteSpace(name))
+                // Read 512-byte tar header block
+                int headerBytesRead = await stream.ReadAsync(buffer, 0, 512);
+                bytesRead += headerBytesRead;
+                
+                if (headerBytesRead == 0 || buffer.All(b => b == 0))
                     break;
 
-                stream.Seek(24, SeekOrigin.Current);
-                stream.Read(buffer, 0, 12);
+                // Extract filename (first 100 bytes)
+                string fileName = Encoding.ASCII.GetString(buffer, 0, 100).TrimEnd('\0');
+                if (string.IsNullOrWhiteSpace(fileName))
+                    break;
 
-                long size;
+                // Extract file size (offset 124, 12 bytes, octal)
+                string sizeStr = Encoding.ASCII.GetString(buffer, 124, 12).TrimEnd('\0', ' ');
+                if (!long.TryParse(sizeStr, System.Globalization.NumberStyles.Integer, null, out long fileSize))
+                    fileSize = 0;
 
-                string hex = Encoding.ASCII.GetString(buffer, 0, 12).Trim('\0', ' ');
-                try
+                // Sanitize filename to prevent path traversal attacks
+                fileName = fileName.Replace('\\', '/').TrimStart('/');
+                var filePath = Path.Combine(outputDir, fileName);
+                
+                // Validate that the resolved path is still within outputDir
+                var fullOutputDir = Path.GetFullPath(outputDir);
+                var fullFilePath = Path.GetFullPath(filePath);
+                if (!fullFilePath.StartsWith(fullOutputDir + Path.DirectorySeparatorChar) && 
+                    fullFilePath != fullOutputDir)
                 {
-                    size = Convert.ToInt64(hex, 8);
+                    Logger.LogError($"Skipping file with suspicious path: {fileName}");
+                    // Skip this file and read past it
+                    long remaining = fileSize;
+                    while (remaining > 0)
+                    {
+                        int toRead = (int)Math.Min(remaining, buffer.Length);
+                        int read = await stream.ReadAsync(buffer, 0, toRead);
+                        bytesRead += read;
+                        if (read == 0) break;
+                        remaining -= read;
+                    }
+                    // Skip padding to next 512-byte boundary
+                    long skipPadding = (512 - (fileSize % 512)) % 512;
+                    if (skipPadding > 0)
+                    {
+                        remaining = skipPadding;
+                        while (remaining > 0)
+                        {
+                            int toRead = (int)Math.Min(remaining, buffer.Length);
+                            int read = await stream.ReadAsync(buffer, 0, toRead);
+                            bytesRead += read;
+                            if (read == 0) break;
+                            remaining -= read;
+                        }
+                    }
+                    continue;
                 }
-                catch (Exception ex)
+
+                if (fileSize > 0)
                 {
-                    throw new Exception("Could not parse hex: " + hex, ex);
-                }
-
-                stream.Seek(376L, SeekOrigin.Current);
-
-                var output = Path.Combine(outputDir, name);
-
-                if (size > 0) 
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(output));
+                    var directory = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(directory))
+                        Directory.CreateDirectory(directory);
 
                     int retry = 0;
                     while (true)
                     {
                         try
                         {
-                            using (var fs = File.Create(output))
+                            using (var fs = File.Create(filePath))
                             {
-                                var blob = new byte[size];
-                                bytesRead += await stream.ReadAsync(blob, 0, blob.Length);
-                                await fs.WriteAsync(blob, 0, blob.Length);
+                                long remaining = fileSize;
+                                while (remaining > 0)
+                                {
+                                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                                    int read = await stream.ReadAsync(buffer, 0, toRead);
+                                    bytesRead += read;
+                                    if (read == 0) break;
+                                    await fs.WriteAsync(buffer, 0, read);
+                                    remaining -= read;
 
-                                if (hasKnownLength)
-                                {
-                                    var percent = (double)bytesRead / total * 100;
-                                    if (timer.ElapsedMilliseconds > 16.65 || percent == 100) 
+                                    // Update progress
+                                    if (hasKnownLength)
                                     {
-                                        Dispatcher.UIThread.Post(() =>
+                                        var percent = (double)bytesRead / total * 100;
+                                        if (timer.ElapsedMilliseconds > 16.65 || percent >= 100) 
                                         {
-                                            onProgress?.Invoke(bytesRead, total, (float)percent);
-                                        });
-                                        timer.Restart();
+                                            Dispatcher.UIThread.Post(() =>
+                                            {
+                                                onProgress?.Invoke(bytesRead, total, (float)percent);
+                                            });
+                                            timer.Restart();
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    // For streams without known length, just report bytes read
-                                    if (timer.ElapsedMilliseconds > 16.65) 
+                                    else
                                     {
-                                        Dispatcher.UIThread.Post(() =>
+                                        // For streams without known length, just report bytes read
+                                        if (timer.ElapsedMilliseconds > 16.65) 
                                         {
-                                            onProgress?.Invoke(bytesRead, bytesRead, 0f);
-                                        });
-                                        timer.Restart();
+                                            Dispatcher.UIThread.Post(() =>
+                                            {
+                                                onProgress?.Invoke(bytesRead, bytesRead, 0f);
+                                            });
+                                            timer.Restart();
+                                        }
                                     }
                                 }
                             }
@@ -896,7 +938,7 @@ namespace Updater.Services
                             {
                                 try
                                 {
-                                    var processName = GetFileProcessName(output);
+                                    var processName = GetFileProcessName(filePath);
                                     Console.WriteLine($"process name to kill: {processName}");
                                     if (processName != null)
                                     {
@@ -915,17 +957,25 @@ namespace Updater.Services
                             }
                         }
                     }
-
                 }
 
-                var pos = stream.Position;
-
-                var offset = 512 - (pos % 512);
-                if (offset == 512)
-                    offset = 0;
-
-                stream.Seek(offset, SeekOrigin.Current);
+                // Skip padding to next 512-byte boundary
+                long padding = (512 - (fileSize % 512)) % 512;
+                if (padding > 0)
+                {
+                    // Read and discard padding bytes instead of seeking
+                    long remaining = padding;
+                    while (remaining > 0)
+                    {
+                        int toRead = (int)Math.Min(remaining, buffer.Length);
+                        int read = await stream.ReadAsync(buffer, 0, toRead);
+                        bytesRead += read;
+                        if (read == 0) break;
+                        remaining -= read;
+                    }
+                }
             }
+            
             timer.Stop();
             Dispatcher.UIThread.Post(() =>
             {
