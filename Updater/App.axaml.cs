@@ -77,7 +77,7 @@ namespace Updater
                                 desktop.MainWindow = new UpdateAvailableWindow
                                 {
                                     DataContext = new UpdateAvailableViewModel(
-                                        currentVersion: Settings.Default.LastVersion?.Version ?? "Unknown",
+                                        currentVersion: GetCurrentVersion(),
                                         latestVersion: await GetLatestVersionInfo(service)
                                     )
                                 };
@@ -133,6 +133,11 @@ namespace Updater
                 desktop.MainWindow.Topmost = true;
                 desktop.MainWindow.SetAlwaysOnTop();
             }
+        }
+
+        private static string GetCurrentVersion()
+        {
+            return UpdateService.GetCurrentVersionString();
         }
 
         private static async Task<string> GetLatestVersionInfo(UpdateService service)

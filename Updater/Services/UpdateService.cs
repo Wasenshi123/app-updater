@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Threading;
 using FluentHttpClient;
 using System;
@@ -125,29 +125,9 @@ namespace Updater.Services
 
             // ====================================================================
 
-            DateTimeOffset? lastMod = null;
-            string? version = null;
-
-            string? checksum = null;
-            var currentFile = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "*.tar.gz")
-                .OrderByDescending(x => new FileInfo(x).LastWriteTimeUtc)
-                .FirstOrDefault();
+            var (version, lastMod, checksum) = GetCurrentVersionInfo();
+            var currentFile = GetCurrentFile();
             var lastVersion = Settings.Default.LastVersion;
-            if (!string.IsNullOrWhiteSpace(currentFile))
-            {
-                var fileInfo = new FileInfo(currentFile);
-                lastMod = fileInfo.LastWriteTimeUtc;
-                version = GetVersionFromFileName(currentFile);
-                checksum = GetMD5HashFromFile(currentFile);
-            }
-            else
-            {
-                if (lastVersion != null)
-                {
-                    lastMod = lastVersion.Modified;
-                    version = lastVersion.Version;
-                }
-            }
 
             var includePreRelease = Settings.Default.EnablePreReleaseVersions;
             
@@ -180,10 +160,12 @@ namespace Updater.Services
                              Logger.LogInfo("New Manifest System: Upgrades available.");
                              return false; // NOT up to date
                         }
-                        if (response.StatusCode == HttpStatusCode.NoContent)
-                        {
-                            return true; // Up to date
-                        }
+                        // If OK but no upgrades needed, fall through to old system check
+                    }
+                    else if (response.StatusCode == HttpStatusCode.NoContent)
+                    {
+                        // Server confirmed no upgrades needed
+                        return true; // Up to date
                     } 
                     else if (response.StatusCode != HttpStatusCode.NotFound) 
                     {
@@ -233,10 +215,11 @@ namespace Updater.Services
                     return false;
                 }
 
+                // Server confirmed we're up to date, trust the server's response
+                // If there's a local file, mark it as already downloaded for potential future use
                 if (!string.IsNullOrWhiteSpace(currentFile))
                 {
                     AlreadyDownloaded = true;
-                    return CheckVersion(lastVersion, currentFile);
                 }
 
                 return true;
@@ -352,8 +335,27 @@ namespace Updater.Services
 
         public async Task<string> ExtractTarballFile(string filePath, string destinationPath, OnProgress onExtractProgress, OnInstallProgress onInstallProgress)
         {
+            Logger.LogUpgradeOutput($"=== Starting ExtractTarballFile ===");
+            Logger.LogUpgradeOutput($"Source file: {filePath}");
+            Logger.LogUpgradeOutput($"Destination: {destinationPath}");
+            
+            var fileInfo = new FileInfo(filePath);
+            Logger.LogUpgradeOutput($"File size: {fileInfo.Length} bytes");
+            
+            // Try to determine versions from package manifest if available
+            string? fromVersion = null;
+            string? toVersion = null;
+            
             Directory.CreateDirectory(destinationPath);
             var extractedFile = Path.Combine(destinationPath, Path.GetFileNameWithoutExtension(filePath));
+
+            Logger.LogUpgradeEvent(new UpgradeLog
+            {
+                Timestamp = DateTimeOffset.Now,
+                Status = UpgradeStatus.InProgress,
+                Stage = UpgradeStage.Extract,
+                Message = "Decompressing archive"
+            });
 
             using (FileStream source = File.OpenRead(filePath))
             using (ProgressStream progressStream = new ProgressStream(source))
@@ -387,6 +389,15 @@ namespace Updater.Services
                 });
             }
 
+            Logger.LogUpgradeOutput("Decompression completed");
+            Logger.LogUpgradeEvent(new UpgradeLog
+            {
+                Timestamp = DateTimeOffset.Now,
+                Status = UpgradeStatus.InProgress,
+                Stage = UpgradeStage.Extract,
+                Message = "Decompression completed, extracting tar archive"
+            });
+
             await Task.Delay(100);
             // Installing (.tar expanding)
             using (FileStream fs = File.OpenRead(extractedFile))
@@ -394,15 +405,40 @@ namespace Updater.Services
                 await ExtractTar(fs, destinationPath, (c, t, p) => onInstallProgress?.Invoke(c, t, p));
             }
             
+            Logger.LogUpgradeOutput("Tar extraction completed");
+            
             // CHECK FOR UPGRADE PACKAGE
             var packageManifestPath = Path.Combine(destinationPath, "package-manifest.json");
             if (File.Exists(packageManifestPath))
             {
+                Logger.LogUpgradeOutput("Manifest package detected. Reading package manifest...");
+                try
+                {
+                    var manifestJson = await File.ReadAllTextAsync(packageManifestPath);
+                    var packageManifest = System.Text.Json.JsonSerializer.Deserialize<UpgradePackageManifest>(manifestJson);
+                    if (packageManifest != null)
+                    {
+                        fromVersion = packageManifest.FromVersion;
+                        toVersion = packageManifest.ToVersion;
+                        Logger.LogUpgradeOutput($"Package manifest: From {fromVersion} to {toVersion}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogUpgradeOutput($"Warning: Failed to parse package manifest: {ex.Message}");
+                }
+                
                 Console.WriteLine("Manifest package detected. Applying upgrades...");
+                Logger.LogUpgradeOutput("Applying upgrades from manifest package...");
                 await ApplyUpgrades(destinationPath, packageManifestPath);
                 // Clean up? ApplyUpgrades handles it.
             }
+            else
+            {
+                Logger.LogUpgradeOutput("No package manifest found - standard app update");
+            }
 
+            Logger.LogUpgradeOutput("=== ExtractTarballFile completed ===");
             return extractedFile;
         }
 
@@ -410,28 +446,66 @@ namespace Updater.Services
         {
             try 
             {
+                Logger.LogUpgradeOutput("=== Starting ApplyUpgrades ===");
+                Logger.LogUpgradeOutput($"Package manifest path: {packageManifestPath}");
+                Logger.LogUpgradeOutput($"Destination path: {destinationPath}");
+
                 var json = await File.ReadAllTextAsync(packageManifestPath);
                 var manifest = System.Text.Json.JsonSerializer.Deserialize<UpgradePackageManifest>(json);
-                if (manifest == null || manifest.Upgrades == null) return;
+                if (manifest == null || manifest.Upgrades == null) 
+                {
+                    Logger.LogUpgradeOutput("No upgrades found in manifest");
+                    return;
+                }
+                
+                Logger.LogUpgradeOutput($"Found {manifest.Upgrades.Count} upgrade(s) to apply");
+                Logger.LogUpgradeOutput($"From version: {manifest.FromVersion ?? "unknown"}");
+                Logger.LogUpgradeOutput($"To version: {manifest.ToVersion ?? "unknown"}");
                 
                 var upgradesDir = Path.Combine(destinationPath, "upgrades");
 
                 foreach (var upgradeId in manifest.Upgrades)
                 {
+                    Logger.LogUpgradeOutput($"\n--- Processing upgrade: {upgradeId} ---");
+                    
                     // Find upgrade folder
                     var upgradePath = Path.Combine(upgradesDir, upgradeId);
                     var upgradeManifestPath = Path.Combine(upgradePath, "manifest.json");
 
                     if (!File.Exists(upgradeManifestPath))
                     {
-                        Logger.LogError($"Manifest for upgrade {upgradeId} not found at {upgradeManifestPath}");
+                        var errorMsg = $"Manifest for upgrade {upgradeId} not found at {upgradeManifestPath}";
+                        Logger.LogError(errorMsg);
+                        Logger.LogUpgradeEvent(new UpgradeLog
+                        {
+                            Timestamp = DateTimeOffset.Now,
+                            UpgradeId = upgradeId,
+                            Status = UpgradeStatus.Failed,
+                            Stage = UpgradeStage.Install,
+                            Message = errorMsg,
+                            Error = errorMsg
+                        });
                         continue;
                     }
 
                     var upgradeManifestJson = await File.ReadAllTextAsync(upgradeManifestPath);
                     var upgradeManifest = System.Text.Json.JsonSerializer.Deserialize<UpgradeManifest>(upgradeManifestJson);
                     
-                    if (upgradeManifest == null) continue;
+                    if (upgradeManifest == null) 
+                    {
+                        Logger.LogUpgradeOutput($"Failed to parse manifest for {upgradeId}");
+                        continue;
+                    }
+                    
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        UpgradeId = upgradeId,
+                        UpgradeName = upgradeManifest.Name,
+                        Status = UpgradeStatus.Started,
+                        Stage = UpgradeStage.Install,
+                        Message = $"Starting upgrade: {upgradeManifest.Name ?? upgradeId}"
+                    });
                     
                     // Scripts (Pre)
                     if (!string.IsNullOrEmpty(upgradeManifest.PreInstallScript))
@@ -439,20 +513,53 @@ namespace Updater.Services
                         var scriptPath = Path.Combine(upgradePath, upgradeManifest.PreInstallScript);
                         if (File.Exists(scriptPath))
                         {
+                            Logger.LogUpgradeEvent(new UpgradeLog
+                            {
+                                Timestamp = DateTimeOffset.Now,
+                                UpgradeId = upgradeId,
+                                UpgradeName = upgradeManifest.Name,
+                                Status = UpgradeStatus.InProgress,
+                                Stage = UpgradeStage.PreInstall,
+                                Message = $"Running PreInstallScript: {upgradeManifest.PreInstallScript}"
+                            });
+                            
                             Logger.LogInfo($"Running PreInstallScript: {upgradeManifest.PreInstallScript}");
                             RunScript(scriptPath, upgradePath, destinationPath);
+                            
+                            Logger.LogUpgradeEvent(new UpgradeLog
+                            {
+                                Timestamp = DateTimeOffset.Now,
+                                UpgradeId = upgradeId,
+                                UpgradeName = upgradeManifest.Name,
+                                Status = UpgradeStatus.InProgress,
+                                Stage = UpgradeStage.PreInstall,
+                                Message = $"PreInstallScript completed: {upgradeManifest.PreInstallScript}"
+                            });
                         }
                     }
 
                     // Files (Binaries & Configs)
-                    if (upgradeManifest.Files != null)
+                    if (upgradeManifest.Files != null && upgradeManifest.Files.Count > 0)
                     {
+                        Logger.LogUpgradeOutput($"Installing {upgradeManifest.Files.Count} file(s)");
+                        Logger.LogUpgradeEvent(new UpgradeLog
+                        {
+                            Timestamp = DateTimeOffset.Now,
+                            UpgradeId = upgradeId,
+                            UpgradeName = upgradeManifest.Name,
+                            Status = UpgradeStatus.InProgress,
+                            Stage = UpgradeStage.Install,
+                            Message = $"Installing {upgradeManifest.Files.Count} file(s)"
+                        });
+
                         foreach (var file in upgradeManifest.Files)
                         {
                             if (string.IsNullOrEmpty(file.Path)) continue;
                             
                             var sourceFile = Path.Combine(upgradePath, file.Path);
                             var targetPath = Path.Combine(destinationPath, file.Target ?? "");
+                            
+                            Logger.LogUpgradeOutput($"Installing file: {file.Path} -> {targetPath}");
                             
                             // Ensure target dir exists
                             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
@@ -461,6 +568,7 @@ namespace Updater.Services
                             {
                                 if (file.Explode)
                                 {
+                                    Logger.LogUpgradeOutput($"Extracting archive: {sourceFile}");
                                     using (var fs = File.OpenRead(sourceFile))
                                     {
                                         if (sourceFile.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
@@ -475,21 +583,35 @@ namespace Updater.Services
                                             await ExtractTar(fs, targetPath);
                                         }
                                     }
+                                    Logger.LogUpgradeOutput($"Extraction completed: {targetPath}");
                                 }
                                 else
                                 {
                                     File.Copy(sourceFile, targetPath, true);
+                                    Logger.LogUpgradeOutput($"File copied: {targetPath}");
+                                    
                                     if (OperatingSystem.IsLinux()) 
                                     {
                                         if (!string.IsNullOrEmpty(file.Permissions))
                                         {
                                             Chmod(targetPath, file.Permissions);
+                                            Logger.LogUpgradeOutput($"Set permissions {file.Permissions} on {targetPath}");
                                         }
                                         else if (file.IsExecutable)
                                         {
                                             Chmod(targetPath, "+x");
+                                            Logger.LogUpgradeOutput($"Set executable permission on {targetPath}");
                                         }
                                     }
+                                }
+                            }
+                            else
+                            {
+                                var errorMsg = $"Source file not found: {sourceFile}";
+                                Logger.LogUpgradeOutput($"ERROR: {errorMsg}");
+                                if (file.IsRequired)
+                                {
+                                    throw new FileNotFoundException(errorMsg);
                                 }
                             }
                         }
@@ -501,18 +623,69 @@ namespace Updater.Services
                         var scriptPath = Path.Combine(upgradePath, upgradeManifest.PostInstallScript);
                         if (File.Exists(scriptPath))
                         {
+                            Logger.LogUpgradeEvent(new UpgradeLog
+                            {
+                                Timestamp = DateTimeOffset.Now,
+                                UpgradeId = upgradeId,
+                                UpgradeName = upgradeManifest.Name,
+                                Status = UpgradeStatus.InProgress,
+                                Stage = UpgradeStage.PostInstall,
+                                Message = $"Running PostInstallScript: {upgradeManifest.PostInstallScript}"
+                            });
+                            
                             Logger.LogInfo($"Running PostInstallScript: {upgradeManifest.PostInstallScript}");
                             RunScript(scriptPath, upgradePath, destinationPath);
+                            
+                            Logger.LogUpgradeEvent(new UpgradeLog
+                            {
+                                Timestamp = DateTimeOffset.Now,
+                                UpgradeId = upgradeId,
+                                UpgradeName = upgradeManifest.Name,
+                                Status = UpgradeStatus.InProgress,
+                                Stage = UpgradeStage.PostInstall,
+                                Message = $"PostInstallScript completed: {upgradeManifest.PostInstallScript}"
+                            });
                         }
                     }
+                    
+                    Logger.LogUpgradeEvent(new UpgradeLog
+                    {
+                        Timestamp = DateTimeOffset.Now,
+                        UpgradeId = upgradeId,
+                        UpgradeName = upgradeManifest.Name,
+                        Status = UpgradeStatus.Completed,
+                        Stage = UpgradeStage.Install,
+                        Message = $"Upgrade completed successfully: {upgradeManifest.Name ?? upgradeId}"
+                    });
+                    
+                    Logger.LogUpgradeOutput($"Upgrade completed: {upgradeId}");
                 }
                 
+                Logger.LogUpgradeOutput("\n=== Cleanup ===");
                 // Cleanup
                 File.Delete(packageManifestPath);
-                if (Directory.Exists(upgradesDir)) Directory.Delete(upgradesDir, true);
+                Logger.LogUpgradeOutput($"Deleted package manifest: {packageManifestPath}");
+                
+                if (Directory.Exists(upgradesDir)) 
+                {
+                    Directory.Delete(upgradesDir, true);
+                    Logger.LogUpgradeOutput($"Deleted upgrades directory: {upgradesDir}");
+                }
+                
+                Logger.LogUpgradeOutput("=== ApplyUpgrades completed successfully ===");
             }
             catch (Exception ex)
             {
+                var errorMsg = $"Error applying upgrades: {ex.Message}";
+                Logger.LogUpgradeOutput($"ERROR: {errorMsg}");
+                Logger.LogUpgradeEvent(new UpgradeLog
+                {
+                    Timestamp = DateTimeOffset.Now,
+                    Status = UpgradeStatus.Failed,
+                    Stage = UpgradeStage.Install,
+                    Message = errorMsg,
+                    Error = ex.ToString()
+                });
                 Logger.LogError("Error applying upgrades", ex);
                 throw;
             }
@@ -522,6 +695,10 @@ namespace Updater.Services
         {
             try
             {
+                Logger.LogUpgradeOutput($"Starting script: {scriptPath}");
+                Logger.LogUpgradeOutput($"Working directory: {workingDir}");
+                Logger.LogUpgradeOutput($"Destination path: {destinationPath}");
+
                 var info = new ProcessStartInfo
                 {
                     WorkingDirectory = workingDir,
@@ -549,24 +726,51 @@ namespace Updater.Services
                     info.Arguments = args;
                 }
                 
+                Logger.LogUpgradeOutput($"Executing: {info.FileName} {info.Arguments}");
+                
                 using (var process = Process.Start(info))
                 {
-                    process.OutputDataReceived += (sender, e) => { if (e.Data != null) Logger.LogInfo($"[Script Output] {e.Data}"); };
-                    process.ErrorDataReceived += (sender, e) => { if (e.Data != null) Logger.LogError($"[Script Error] {e.Data}"); };
+                    if (process == null)
+                    {
+                        throw new Exception("Failed to start process");
+                    }
+
+                    // Capture all output to upgrade.log
+                    process.OutputDataReceived += (sender, e) => 
+                    { 
+                        if (e.Data != null) 
+                        {
+                            Logger.LogUpgradeOutput($"[STDOUT] {e.Data}");
+                            Logger.LogInfo($"[Script Output] {e.Data}");
+                        }
+                    };
+                    process.ErrorDataReceived += (sender, e) => 
+                    { 
+                        if (e.Data != null) 
+                        {
+                            Logger.LogUpgradeOutput($"[STDERR] {e.Data}");
+                            Logger.LogError($"[Script Error] {e.Data}");
+                        }
+                    };
                     
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
                     
                     process.WaitForExit();
                     
+                    Logger.LogUpgradeOutput($"Script exited with code: {process.ExitCode}");
+                    
                     if (process.ExitCode != 0)
                     {
                         throw new Exception($"Script exited with code {process.ExitCode}");
                     }
                 }
+                
+                Logger.LogUpgradeOutput($"Script completed successfully: {scriptPath}");
             }
             catch (Exception ex)
             {
+                Logger.LogUpgradeOutput($"Script failed: {ex.Message}");
                 Logger.LogError($"Failed to run script {scriptPath}", ex);
                 throw;
             }
@@ -727,6 +931,40 @@ namespace Updater.Services
             return currentFile;
         }
 
+        /// <summary>
+        /// Gets the current version information (version, modified date, checksum) from either
+        /// a .tar.gz file in the base directory or from settings.
+        /// </summary>
+        private static (string? version, DateTimeOffset? modified, string? checksum) GetCurrentVersionInfo()
+        {
+            var currentFile = GetCurrentFile();
+            var lastVersion = Settings.Default.LastVersion;
+
+            if (!string.IsNullOrWhiteSpace(currentFile))
+            {
+                var fileInfo = new FileInfo(currentFile);
+                var version = GetVersionFromFileName(currentFile);
+                var checksum = GetMD5HashFromFile(currentFile);
+                return (version, fileInfo.LastWriteTimeUtc, checksum);
+            }
+            else if (lastVersion != null)
+            {
+                return (lastVersion.Version, lastVersion.Modified, null);
+            }
+
+            return (null, null, null);
+        }
+
+        /// <summary>
+        /// Gets the current version string for display purposes.
+        /// Returns "Unknown" if no version can be determined.
+        /// </summary>
+        public static string GetCurrentVersionString()
+        {
+            var (version, _, _) = GetCurrentVersionInfo();
+            return version ?? "Unknown";
+        }
+
         public static string GetFileProcessName(string filePath)
         {
             if (OperatingSystem.IsLinux())
@@ -758,7 +996,7 @@ namespace Updater.Services
             return null;
         }
 
-        private static string GetUpdaterVersion()
+        public static string GetUpdaterVersion()
         {
             try
             {
